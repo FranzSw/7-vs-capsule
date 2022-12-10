@@ -44,13 +44,17 @@ def load_files_for_subject(subject_id: str) -> dict[str, list[int], str]:
 class NSCLDataSet(Dataset):
     """Lung-PET-CT-Dx dataset."""
 
-    def __init__(self, dataset_path: str = dataset_path, transform=None, cache=True):
+    def __init__(self, dataset_path: str = dataset_path, transform=None, cache=True, subject_count=None):
         # dirs = [d for d in os.listdir(datasetPath) if os.isdir(d)]
 
         csv_path = os.path.join(dataset_path, 'metadata.csv')
         csv_file = pd.read_csv(csv_path)
 
         self.subjects = csv_file['Subject ID'].unique()
+        if subject_count:
+            print(f'Only using {subject_count} subjects')
+            self.subjects = self.subjects[:subject_count]
+
         self.paths_label_subject = []
 
         self.load_metadata(cache)
@@ -64,7 +68,7 @@ class NSCLDataSet(Dataset):
         else:
             with ProcessPoolExecutor(max_workers=8) as executor:
                 for r in executor.map(load_files_for_subject, self.subjects):
-                    self.paths_label_subject.append(r)
+                    self.paths_label_subject += r
                     
             if cache:
                 with open(cache_file, 'wb') as f:
