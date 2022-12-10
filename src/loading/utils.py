@@ -1,5 +1,5 @@
 import os
-import cv2
+# import cv2
 import numpy as np
 import pydicom as dicomio
 import SimpleITK as sitk
@@ -53,7 +53,8 @@ def MatrixToImage(data, ch):
     # new_im = Image.fromarray(data.astype(np.uint8))
     # new_im.show()
     if ch == 3:
-        img_rgb = cv2.cvtColor(data, cv2.COLOR_BGR2RGB)
+        pass
+        # img_rgb = cv2.cvtColor(data, cv2.COLOR_BGR2RGB)
     if ch == 1:
         data = (data + 1024) * 0.125
         img_rgb = data.astype(np.uint8)

@@ -57,6 +57,7 @@ class XML_preprocessor(object):
 
     def _to_one_hot(self, name):
         one_hot_vector = [0] * self.num_classes
+        name = str(name).upper()
         if name == 'A':
             one_hot_vector[0] = 1
         elif name == 'B':
