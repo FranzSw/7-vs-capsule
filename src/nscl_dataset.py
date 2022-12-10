@@ -10,7 +10,7 @@ import pickle
 from loading.get_data_from_XML import *
 from loading.getUID import *
 
-dataset_path = "/Volumes/X/datasets/Lung-PET-CT-Dx"
+dataset_path = "/dhc/dsets/Lung-PET-CT-Dx"
 num_classes = 4
 cache_file = 'ds_cache.pickle'
 
