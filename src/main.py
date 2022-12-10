@@ -15,7 +15,4 @@ def main():
     plt.imshow(arr, cmap="gray")
     plt.show()
 
-
-
-
 main()
