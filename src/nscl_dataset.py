@@ -10,7 +10,7 @@ import pickle
 from loading.get_data_from_XML import *
 from loading.getUID import *
 
-dataset_path = "/Volumes/X/datasets/Lung-PET-CT-Dx"
+dataset_path = "/dhc/dsets/Lung-PET-CT-Dx"
 num_classes = 4
 cache_file = 'ds_cache.pickle'
 
@@ -85,6 +85,17 @@ class NSCLDataSet(Dataset):
         
         # Read from path
         img = dcmread(path).pixel_array
+        # Add channel dimension if greyscale by repeating gray channel
+        if len(img.shape) == 2:
+            img = np.array(img, dtype=np.float32)[np.newaxis]
+            img = np.repeat(img, 3, 0)
+        elif len(img.shape) == 3:
+            img = img.transpose((2,0,1))
+        else:
+            raise Exception(f"Unknown shape of dicom: {img.shape}")
+        
+        # Convert to tensor with now proper Channel x Height x Width dimensions
+        img = torch.from_numpy(img)
 
         if self.transform:
             img = self.transform(img)
