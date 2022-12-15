@@ -41,7 +41,7 @@ def load_files_for_subject(subject_id: str) -> list[tuple[str, list[int], str]]:
 
     return paths_label_subject
 
-class NSCLDataSet(Dataset):
+class LungPetCtDxDataset(Dataset):
     """Lung-PET-CT-Dx dataset."""
 
     def __init__(self, dataset_path: str = dataset_path, transform=None, cache=True, subject_count=None):
