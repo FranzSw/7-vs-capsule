@@ -22,7 +22,7 @@ def get_xml_files(subject_ids):
     return list(filter(lambda tuple: os.path.exists(tuple[1]), ids_folders))
 
 
-def load_files_for_subject(subject_id: str) -> dict[str, list[int], str]:
+def load_files_for_subject(subject_id: str) -> list[tuple[str, list[int], str]]:
     print(f'Loading subject {subject_id}')
     folder = os.path.join(dataset_path, 'labels', shortId(subject_id))
     if not os.path.exists(folder):
