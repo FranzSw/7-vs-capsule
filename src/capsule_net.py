@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-
+from capsnet_config import Config
 USE_CUDA = True if torch.cuda.is_available() else False
 
 
@@ -108,13 +108,14 @@ class Decoder(nn.Module):
             masked = masked.cuda()
         masked = masked.index_select(dim=0, index=Variable(max_length_indices.squeeze(1).data))
         t = (x * masked[:, :, None, None]).view(x.size(0), -1)
+    
         reconstructions = self.reconstraction_layers(t)
         reconstructions = reconstructions.view(-1, self.input_channel, self.input_width, self.input_height)
         return reconstructions, masked
 
 
 class CapsNet(nn.Module):
-    def __init__(self, config=None):
+    def __init__(self, config=Config()):
         super(CapsNet, self).__init__()
         if config:
             self.conv_layer = ConvLayer(config.cnn_in_channels, config.cnn_out_channels, config.cnn_kernel_size)
@@ -122,12 +123,8 @@ class CapsNet(nn.Module):
                                                 config.pc_kernel_size, config.pc_num_routes)
             self.digit_capsules = DigitCaps(config.dc_num_capsules, config.dc_num_routes, config.dc_in_channels,
                                             config.dc_out_channels)
-            self.decoder = Decoder(config.input_width, config.input_height, config.cnn_in_channels)
-        else:
-            self.conv_layer = ConvLayer()
-            self.primary_capsules = PrimaryCaps()
-            self.digit_capsules = DigitCaps()
-            self.decoder = Decoder()
+            self.decoder = Decoder(config.input_width, config.input_height, config.cnn_in_channels, config.dc_num_capsules)
+            self.reconstruction_loss_factor = config.reconstruction_loss_factor
 
         self.mse_loss = nn.MSELoss()
 
@@ -149,9 +146,10 @@ class CapsNet(nn.Module):
 
         loss = labels * left + 0.5 * (1.0 - labels) * right
         loss = loss.sum(dim=1).mean()
-
+      
         return loss
 
     def reconstruction_loss(self, data, reconstructions):
         loss = self.mse_loss(reconstructions.view(reconstructions.size(0), -1), data.view(reconstructions.size(0), -1))
-        return loss * 0.0005
+
+        return loss * self.reconstruction_loss_factor
