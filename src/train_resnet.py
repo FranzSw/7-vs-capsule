@@ -176,7 +176,7 @@ def main():
     resnet = create_model(resnet_config)
     resnet.to(device)
 
-    start_wandb_run(asdict(resnet_config))
+    start_wandb_run(resnet_config)
     wandb_watch(resnet)
 
     criterion = nn.CrossEntropyLoss()

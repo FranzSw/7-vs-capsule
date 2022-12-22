@@ -1,9 +1,10 @@
 import wandb
-
+from dataclasses import asdict, dataclass, is_dataclass
 
 # # Start a training run
-def start_wandb_run(config: dict):
-    wandb.init(project="advanced-ml", entity="7-vs-capsule", config=config)
+def start_wandb_run(config):
+    assert is_dataclass(config)
+    wandb.init(project="advanced-ml", entity="7-vs-capsule", config=asdict(config))
 
 # # Watch a model
 def wandb_watch(model, *, log_freq: int = 100):
