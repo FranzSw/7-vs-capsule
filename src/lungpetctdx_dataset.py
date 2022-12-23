@@ -53,7 +53,7 @@ class LungPetCtDxDataset(Dataset):
     """Lung-PET-CT-Dx dataset."""
     color_channels = 3
 
-    def __init__(self, dataset_path: str = dataset_path, pre_normalize_transform=None, post_normalize_transform=None, cache=True, subject_count=None, exclude_classes: Union[list[str], None] = None, normalize=False):
+    def __init__(self, dataset_path: str = dataset_path, post_normalize_transform=None, cache=True, subject_count=None, exclude_classes: Union[list[str], None] = None, normalize=False):
         # dirs = [d for d in os.listdir(datasetPath) if os.isdir(d)]
         self.cache_file = Path(
             f'../cache/{type(self).__name__}_metadata.pickle')
@@ -71,16 +71,17 @@ class LungPetCtDxDataset(Dataset):
             self.subjects = self.subjects[:subject_count]
 
         self.paths_label_subject = []
+
         self.post_normalize_transform = post_normalize_transform
-        self.pre_normalize_transform = pre_normalize_transform
-        self.normalize = normalize
-        self.load_metadata(cache)
         self._disable_transform_and_norm = False
+        self._force_normalize_for_dist_calc = False
+        self._normalization_transform = None
+        self.load_metadata(cache, normalize)
 
     def isExcluded(self, label: str):
         return label in self.exclude_classes if self.exclude_classes != None else False
 
-    def load_metadata(self, cache):
+    def load_metadata(self, cache, normalize):
         if cache and os.path.exists(self.cache_file):
             with open(self.cache_file, 'rb') as f:
                 self.paths_label_subject = pickle.load(f)
@@ -99,16 +100,19 @@ class LungPetCtDxDataset(Dataset):
             self.paths_label_subject = list(
                 filter(lambda item: not self.isExcluded(item[1]), self.paths_label_subject))
 
-        if self.normalize:
+        if normalize:
+            mean, sd = None, None
             if cache and os.path.exists(self.data_distribution_cache_file):
                 with open(self.data_distribution_cache_file, 'rb') as f:
-                    self.mean, self.sd = pickle.load(f)
+                    mean, sd = pickle.load(f)
             else:
-                self.mean, self.sd = self.calculateMeanAndSD()
+                mean, sd = self.calculateMeanAndSD()
                 if cache:
                     with open(self.data_distribution_cache_file, 'wb') as f:
-                        pickle.dump((self.mean, self.sd), f,
+                        pickle.dump((mean, sd), f,
                                     pickle.HIGHEST_PROTOCOL)
+            self._normalization_transform = transforms.Normalize(
+                mean=mean, std=sd)
 
     def __len__(self):
         return len(self.paths_label_subject)
@@ -129,24 +133,23 @@ class LungPetCtDxDataset(Dataset):
             raise Exception(f"Unknown shape of dicom: {img.shape}")
 
         # Convert to tensor with now proper Channel x Height x Width dimensions
-        img = torch.from_numpy(img)
+        img = torch.from_numpy(img.astype(np.float32))
 
-        if not self._disable_transform_and_norm:
-            if self.pre_normalize_transform:
-                img = self.pre_normalize_transform(img)
-            
-            if self.normalize:
-                img = transforms.Normalize(mean=self.mean, std=self.sd)(img)
-                
-            if self.post_normalize_transform:
-                img = self.post_normalize_transform(img)
-        
+        if self._normalization_transform:
+            img = self._normalization_transform(img)
+
+        if self.post_normalize_transform and (not self._disable_transform_and_norm or self._force_normalize_for_dist_calc):
+            img = self.post_normalize_transform(img)
+
         label_one_hot = np.eye(len(self.class_names))[
             self.class_names.index(label)]
         return (img, label_one_hot)
 
-    def calculateMeanAndSD(self, batch_size=32):
+    def calculateMeanAndSD(self, batch_size=32, normalize=False):
         self._disable_transform_and_norm = True
+        if normalize:
+            self._force_normalize_for_dist_calc = True
+
         loader = DataLoader(self,
                             batch_size=batch_size,
                             num_workers=0,
@@ -174,7 +177,7 @@ class LungPetCtDxDataset(Dataset):
         mean, sd = mean.div(numBatches), var.div(numBatches).sqrt()
 
         print(f'Calculated mean: {mean}, sd: {sd}')
-        print("Use sd with caution, it's not yet properly tested")
 
         self._disable_transform_and_norm = False
+        self._force_normalize_for_dist_calc = False
         return mean, sd
