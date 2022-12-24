@@ -65,10 +65,10 @@ class LungPetCtDxDataset(Dataset):
         csv_path = os.path.join(dataset_path, 'metadata.csv')
         csv_file = pd.read_csv(csv_path)
 
-        self.subjects = csv_file['Subject ID'].unique()
+        self.all_subjects = csv_file['Subject ID'].unique()
         if subject_count:
             print(f'Only using {subject_count} subjects')
-            self.subjects = self.subjects[:subject_count]
+            self.filtered_subjects = self.all_subjects[:subject_count]
 
         self.paths_label_subject = []
 
@@ -87,7 +87,7 @@ class LungPetCtDxDataset(Dataset):
                 self.paths_label_subject = pickle.load(f)
         else:
             with ProcessPoolExecutor(max_workers=8) as executor:
-                for r in executor.map(load_files_for_subject, self.subjects):
+                for r in executor.map(load_files_for_subject, self.all_subjects):
                     self.paths_label_subject += r
 
             if cache:
@@ -96,6 +96,10 @@ class LungPetCtDxDataset(Dataset):
                     # Pickle the 'data' dictionary using the highest protocol available.
                     pickle.dump(self.paths_label_subject,
                                 f, pickle.HIGHEST_PROTOCOL)
+        if not self.filtered_subjects == None:
+            self.paths_label_subject = list(
+                filter(lambda item: item[2] in self.filtered_subjects, self.paths_label_subject))
+
         if not self.exclude_classes == None:
             self.paths_label_subject = list(
                 filter(lambda item: not self.isExcluded(item[1]), self.paths_label_subject))
