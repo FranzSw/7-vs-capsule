@@ -5,3 +5,4 @@ settings.json
 .vscode
 cache/
 wandb
+*.png

@@ -60,7 +60,7 @@ def create_splitted_dataset():
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    trainSet, valSet = random_split(LungPetCtDxDataset(transform=preprocess), [0.8, 0.2])
+    trainSet, valSet = LungPetCtDxDataset(transform=preprocess).subject_split(test_size=0.2)
     return trainSet, valSet
 
 def create_dataloaders(trainSet: Subset, valSet: Subset):
@@ -150,7 +150,7 @@ def train_model(dataloaders, class_names, model, criterion, optimizer, scheduler
                 best_acc = epoch_acc
                 best_model_wts = copy.deepcopy(model.state_dict())
             if phase == 'val':
-                plot_confusion_matrix(dataloaders, class_names, model, idx)
+                plot_confusion_matrix(dataloaders, class_names, model, epoch)
 
         print()
         wandb_log(result_dict)
@@ -172,6 +172,7 @@ def main():
     # dataset_sizes = {"train": len(trainSet),"val": len(valSet)}
 
     resnet_config = ResnetConfig(num_outputs= len(class_names))
+    resnet_config.weighted_loss = True
 
     resnet = create_model(resnet_config)
     resnet.to(device)
@@ -179,7 +180,10 @@ def main():
     start_wandb_run(resnet_config)
     wandb_watch(resnet)
 
-    criterion = nn.CrossEntropyLoss()
+    if resnet_config.weighted_loss:
+        criterion = nn.CrossEntropyLoss(weight=trainSet.dataset.get_class_weights_inverse().to(device))
+    else:
+        criterion = nn.CrossEntropyLoss()
     # Observe that all parameters are being optimized
     optimizer_ft = optim.Adam(resnet.parameters(), lr=0.001)
     # Decay LR by a factor of 0.1 every 7 epochs

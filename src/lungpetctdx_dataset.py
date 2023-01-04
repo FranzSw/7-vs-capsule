@@ -1,8 +1,10 @@
 from concurrent.futures import ProcessPoolExecutor
+from copy import deepcopy
+import random
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, Subset, DataLoader
 from pydicom import dcmread
-from pydicom.data import get_testdata_file
+from sklearn.model_selection import train_test_split
 import pandas as pd
 import os
 import pickle
@@ -81,6 +83,30 @@ class LungPetCtDxDataset(Dataset):
     def isExcluded(self, label: str):
         return label in self.exclude_classes if self.exclude_classes != None else False
 
+    def subject_split(self, test_size: float):
+        subj_train, subj_test = train_test_split(self.subjects, test_size=test_size, random_state=42)
+        idx_train = []
+        idx_test = []
+        for idx, t in enumerate(self.paths_label_subject):
+            if t[2] in subj_test:
+                idx_test.append(idx)
+            else:
+                idx_train.append(idx)
+        train_dataset_split = Subset(self, idx_train)
+        test_dataset_split = Subset(self, idx_test)
+        
+        return train_dataset_split, test_dataset_split
+
+    # Returns weights between 0 and 1 inverse to the amount they take up in the dataset
+    def get_class_weights_inverse(self):
+        _, labels, _ = list(zip(*self.paths_label_subject))
+        labels = list(map(lambda l: self.to_one_hot(l), labels))
+        weights = np.sum(labels, axis=0, dtype='float32')
+        weights = weights / weights.sum()
+        weights = 1.0 / weights
+        weights = weights / weights.sum()
+        return torch.tensor(weights)
+
     def load_metadata(self, cache, normalize):
         if cache and os.path.exists(self.cache_file):
             with open(self.cache_file, 'rb') as f:
@@ -121,6 +147,9 @@ class LungPetCtDxDataset(Dataset):
     def __len__(self):
         return len(self.paths_label_subject)
 
+    def to_one_hot(self, label):
+        return np.eye(len(self.class_names))[self.class_names.index(label)]
+
     def __getitem__(self, idx):
 
         path, label, subject = self.paths_label_subject[idx]
@@ -145,8 +174,7 @@ class LungPetCtDxDataset(Dataset):
         if self.post_normalize_transform and (not self._disable_transform_and_norm or self._force_normalize_for_dist_calc):
             img = self.post_normalize_transform(img)
 
-        label_one_hot = np.eye(len(self.class_names))[
-            self.class_names.index(label)]
+        label_one_hot = self.to_one_hot(label)
         return (img, label_one_hot)
 
     def calculateMeanAndSD(self, batch_size=32, normalize=False):
