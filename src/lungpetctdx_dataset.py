@@ -55,7 +55,7 @@ class LungPetCtDxDataset(Dataset):
     """Lung-PET-CT-Dx dataset."""
     color_channels = 3
 
-    def __init__(self, dataset_path: str = dataset_path, post_normalize_transform=None, cache=True, subject_count=None, exclude_classes: Union[list[str], None] = None, normalize=False):
+    def __init__(self, dataset_path: str = dataset_path, post_normalize_transform=None, cache=True, subject_count=None, exclude_classes: Union[list[str], None] = None, normalize=False, max_size:int=-1):
         # dirs = [d for d in os.listdir(datasetPath) if os.isdir(d)]
         self.cache_file = Path(
             f'../cache/{type(self).__name__}_metadata.pickle')
@@ -79,6 +79,9 @@ class LungPetCtDxDataset(Dataset):
         self._force_normalize_for_dist_calc = False
         self._normalization_transform = None
         self.load_metadata(cache, normalize)
+
+        if max_size != -1:
+            self.paths_label_subject = self.paths_label_subject[:max_size]
 
     def isExcluded(self, label: str):
         return label in self.exclude_classes if self.exclude_classes != None else False
