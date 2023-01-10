@@ -55,7 +55,7 @@ class LungPetCtDxDataset(Dataset):
     """Lung-PET-CT-Dx dataset."""
     color_channels = 3
 
-    def __init__(self, dataset_path: str = dataset_path, post_normalize_transform=None, cache=True, subject_count=None, exclude_classes: Union[list[str], None] = None, normalize=False, max_size:int=-1):
+    def __init__(self, dataset_path: str = dataset_path, post_normalize_transform=None, cache=True, subject_count=None, exclude_classes: Union[list[str], None] = None, normalize=False, max_size: int = -1):
         # dirs = [d for d in os.listdir(datasetPath) if os.isdir(d)]
         self.cache_file = Path(
             f'../cache/{type(self).__name__}_metadata.pickle')
@@ -68,7 +68,7 @@ class LungPetCtDxDataset(Dataset):
         csv_file = pd.read_csv(csv_path)
 
         self.all_subjects = csv_file['Subject ID'].unique()
-        self.filtered_subjects= None
+        self.filtered_subjects = None
         if subject_count:
             print(f'Only using {subject_count} subjects')
             self.filtered_subjects = self.all_subjects[:subject_count]
@@ -88,7 +88,8 @@ class LungPetCtDxDataset(Dataset):
         return label in self.exclude_classes if self.exclude_classes != None else False
 
     def subject_split(self, test_size: float):
-        subj_train, subj_test = train_test_split(self.all_subjects, test_size=test_size, random_state=42)
+        subj_train, subj_test = train_test_split(
+            self.all_subjects if self.filtered_subjects == None else self.filtered_subjects, test_size=test_size, random_state=42)
         idx_train = []
         idx_test = []
         for idx, t in enumerate(self.paths_label_subject):
@@ -98,7 +99,7 @@ class LungPetCtDxDataset(Dataset):
                 idx_train.append(idx)
         train_dataset_split = Subset(self, idx_train)
         test_dataset_split = Subset(self, idx_test)
-        
+
         return train_dataset_split, test_dataset_split
 
     # Returns weights between 0 and 1 inverse to the amount they take up in the dataset

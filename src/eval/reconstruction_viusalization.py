@@ -14,11 +14,11 @@ def _mse(imageA: np.ndarray, imageB: np.ndarray):
 	# return the MSE, the lower the error, the more "similar"
 	# the two images are
 	return err
-def compare_images(images: list[tuple[torch.Tensor, torch.Tensor]], title):
+def compare_images(images: list[tuple[torch.Tensor, torch.Tensor]], predictions: list[torch.Tensor], actuals: list[torch.Tensor]):
 	
 	#s = ssim(imgAnp, imgBnp)
 	# setup the figure
-	fig = plt.figure(title, figsize=(2, len(images)))
+	fig = plt.figure("Comparison", figsize=(2, len(images)))
 	fig.set_size_inches(10, 5*len(images))
 	for i, (imageA, imageB) in enumerate(images):
 		imgAnp, imgBnp = imageA.cpu().numpy().transpose((1,2,0)), imageB.cpu().numpy().transpose((1,2,0))
@@ -28,10 +28,12 @@ def compare_images(images: list[tuple[torch.Tensor, torch.Tensor]], title):
 		plt.suptitle("MSE: %.2f, SSIM: %.2f" % (m, 0))
 		# show first image
 		ax = fig.add_subplot(len(images), 2, i*2+1)
+		ax.set_title(f"Actual: {str(actuals[i].item())}")
 		plt.imshow(imgAnp)
 		plt.axis("off")
 		# show the second image
 		ax = fig.add_subplot(len(images), 2, i*2+2)
+		ax.set_title(f"Predicted: {str(predictions[i].item())}")
 		plt.imshow(imgBnp)
 		plt.axis("off")
 	# show the images

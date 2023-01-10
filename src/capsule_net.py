@@ -83,14 +83,14 @@ class DigitCaps(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, input_width=28, input_height=28, input_channel=1, dc_num_capsules=10):
+    def __init__(self, input_width=28, input_height=28, input_channel=1, dc_num_capsules=10, out_capsule_size=16):
         super(Decoder, self).__init__()
         self.input_width = input_width
         self.input_height = input_height
         self.input_channel = input_channel
         self.dc_num_capsules = dc_num_capsules
         self.reconstraction_layers = nn.Sequential(
-            nn.Linear(16 * dc_num_capsules, 512),
+            nn.Linear(out_capsule_size * dc_num_capsules, 512),
             nn.ReLU(inplace=True),
             nn.Linear(512, 1024),
             nn.ReLU(inplace=True),
@@ -123,7 +123,7 @@ class CapsNet(nn.Module):
                                                 config.pc_kernel_size, config.pc_num_routes)
             self.digit_capsules = DigitCaps(config.dc_num_capsules, config.dc_num_routes, config.dc_in_channels,
                                             config.dc_out_channels)
-            self.decoder = Decoder(config.input_width, config.input_height, config.cnn_in_channels, config.dc_num_capsules)
+            self.decoder = Decoder(config.input_width, config.input_height, config.cnn_in_channels, config.dc_num_capsules, config.dc_out_channels)
             self.reconstruction_loss_factor = config.reconstruction_loss_factor
 
         self.mse_loss = nn.MSELoss()
