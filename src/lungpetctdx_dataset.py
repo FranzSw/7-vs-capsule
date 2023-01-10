@@ -68,6 +68,7 @@ class LungPetCtDxDataset(Dataset):
         csv_file = pd.read_csv(csv_path)
 
         self.all_subjects = csv_file['Subject ID'].unique()
+        self.filtered_subjects= None
         if subject_count:
             print(f'Only using {subject_count} subjects')
             self.filtered_subjects = self.all_subjects[:subject_count]
@@ -87,7 +88,7 @@ class LungPetCtDxDataset(Dataset):
         return label in self.exclude_classes if self.exclude_classes != None else False
 
     def subject_split(self, test_size: float):
-        subj_train, subj_test = train_test_split(self.subjects, test_size=test_size, random_state=42)
+        subj_train, subj_test = train_test_split(self.all_subjects, test_size=test_size, random_state=42)
         idx_train = []
         idx_test = []
         for idx, t in enumerate(self.paths_label_subject):
