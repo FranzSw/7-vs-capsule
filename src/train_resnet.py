@@ -10,7 +10,7 @@ from torchvision import transforms
 import matplotlib.pyplot as plt
 import time
 import copy
-from lungpetctdx_dataset import LungPetCtDxDataset
+from lungpetctdx_dataset import LungPetCtDxDataset, all_class_names
 
 from tqdm import tqdm
 
@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, f1_score
 
 from model_config.ResnetConfig import ResnetConfig
+from utils.mask import mask_image
 from utils.wandb import start_wandb_run, wandb_log, wandb_watch
 
 def plot_confusion_matrix(dataloaders, class_names, model, suf=''):
@@ -53,14 +54,12 @@ else:
 
 def create_splitted_dataset():
     preprocess = transforms.Compose([
-        transforms.ToPILImage(),
         transforms.Resize(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        # transforms.CenterCrop(224),
+        # transforms.ToTensor(),
     ])
 
-    trainSet, valSet = LungPetCtDxDataset(transform=preprocess).subject_split(test_size=0.2)
+    trainSet, valSet = LungPetCtDxDataset(post_normalize_transform=preprocess, exclude_classes=[all_class_names[1],all_class_names[2]]).subject_split(test_size=0.2)
     return trainSet, valSet
 
 def create_dataloaders(trainSet: Subset, valSet: Subset):
@@ -106,9 +105,12 @@ def train_model(dataloaders, class_names, model, criterion, optimizer, scheduler
             number_of_batches = len(dataloaders[phase])
 
             # Iterate over data.
-            for idx,(inputs, labels) in tqdm(enumerate(dataloaders[phase], 0), unit="batch", total=number_of_batches):
+            for idx,(inputs, labels, bounding_boxes) in tqdm(enumerate(dataloaders[phase], 0), unit="batch", total=number_of_batches):
+                inputs = torch.tensor(list(map(mask_image, inputs, bounding_boxes)))
+ 
                 inputs = inputs.to(device)
                 labels = labels.to(device)
+
 
                 # zero the parameter gradients
                 optimizer.zero_grad()
@@ -167,12 +169,12 @@ def train_model(dataloaders, class_names, model, criterion, optimizer, scheduler
 def main():
     trainSet, valSet = create_splitted_dataset()
     dataloaders = create_dataloaders(trainSet, valSet)
-    class_names = ["Adenocarcinoma", "Small Cell Carcinoma", "Large Cell Carcinoma", "Squamous Cell Carcinoma"]
+    class_names = [all_class_names[0], all_class_names[3]]
     num_classes = len(class_names)
     # dataset_sizes = {"train": len(trainSet),"val": len(valSet)}
 
     resnet_config = ResnetConfig(num_outputs= len(class_names))
-    resnet_config.weighted_loss = True
+    resnet_config.weighted_loss = False
 
     resnet = create_model(resnet_config)
     resnet.to(device)

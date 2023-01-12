@@ -1,6 +1,4 @@
 from concurrent.futures import ProcessPoolExecutor
-from copy import deepcopy
-import random
 import torch
 from torch.utils.data import Dataset, Subset, DataLoader
 from pydicom import dcmread
@@ -30,7 +28,7 @@ def get_xml_files(subject_ids):
     return list(filter(lambda tuple: os.path.exists(tuple[1]), ids_folders))
 
 
-def load_files_for_subject(subject_id: str) -> list[tuple[str, str, str]]:
+def load_files_for_subject(subject_id: str) -> list[tuple[str, str, str, list[int]]]:
     print(f'Loading subject {subject_id}')
     folder = os.path.join(dataset_path, 'labels', shortId(subject_id))
     if not os.path.exists(folder):
@@ -40,15 +38,16 @@ def load_files_for_subject(subject_id: str) -> list[tuple[str, str, str]]:
     available_dicom_files = getUID_path(
         os.path.join(dataset_path, 'data', subject_id))
 
-    paths_label_subject = []
+    paths_label_subject_mask = []
     for k, v in annotations.items():
         dcm_path, dcm_name = available_dicom_files.get(k[:-4], (None, None))
         if dcm_path is None:
             continue
         label = all_class_names[np.argmax(v[0][-num_classes:])]
-        paths_label_subject.append((dcm_path, label, subject_id))
+        bounding_box = v[0][:4]
+        paths_label_subject_mask.append((dcm_path, label, subject_id, bounding_box))
 
-    return paths_label_subject
+    return paths_label_subject_mask
 
 
 class LungPetCtDxDataset(Dataset):
@@ -73,7 +72,7 @@ class LungPetCtDxDataset(Dataset):
             print(f'Only using {subject_count} subjects')
             self.filtered_subjects = self.all_subjects[:subject_count]
 
-        self.paths_label_subject = []
+        self.paths_label_subject_mask = []
 
         self.post_normalize_transform = post_normalize_transform
         self._disable_transform_and_norm = False
@@ -82,7 +81,7 @@ class LungPetCtDxDataset(Dataset):
         self.load_metadata(cache, normalize)
 
         if max_size != -1:
-            self.paths_label_subject = self.paths_label_subject[:max_size]
+            self.paths_label_subject_mask = self.paths_label_subject_mask[:max_size]
 
     def isExcluded(self, label: str):
         return label in self.exclude_classes if self.exclude_classes != None else False
@@ -92,7 +91,7 @@ class LungPetCtDxDataset(Dataset):
             self.all_subjects if self.filtered_subjects == None else self.filtered_subjects, test_size=test_size, random_state=42)
         idx_train = []
         idx_test = []
-        for idx, t in enumerate(self.paths_label_subject):
+        for idx, t in enumerate(self.paths_label_subject_mask):
             if t[2] in subj_test:
                 idx_test.append(idx)
             else:
@@ -104,7 +103,7 @@ class LungPetCtDxDataset(Dataset):
 
     # Returns weights between 0 and 1 inverse to the amount they take up in the dataset
     def get_class_weights_inverse(self):
-        _, labels, _ = list(zip(*self.paths_label_subject))
+        _, labels, _ = list(zip(*self.paths_label_subject_mask))
         labels = list(map(lambda l: self.to_one_hot(l), labels))
         weights = np.sum(labels, axis=0, dtype='float32')
         weights = weights / weights.sum()
@@ -115,25 +114,25 @@ class LungPetCtDxDataset(Dataset):
     def load_metadata(self, cache, normalize):
         if cache and os.path.exists(self.cache_file):
             with open(self.cache_file, 'rb') as f:
-                self.paths_label_subject = pickle.load(f)
+                self.paths_label_subject_mask = pickle.load(f)
         else:
             with ProcessPoolExecutor(max_workers=8) as executor:
                 for r in executor.map(load_files_for_subject, self.all_subjects):
-                    self.paths_label_subject += r
+                    self.paths_label_subject_mask += r
 
             if cache:
                 os.makedirs(self.cache_file.parent, exist_ok=True)
                 with open(self.cache_file, 'wb') as f:
                     # Pickle the 'data' dictionary using the highest protocol available.
-                    pickle.dump(self.paths_label_subject,
+                    pickle.dump(self.paths_label_subject_mask,
                                 f, pickle.HIGHEST_PROTOCOL)
         if not self.filtered_subjects == None:
-            self.paths_label_subject = list(
-                filter(lambda item: item[2] in self.filtered_subjects, self.paths_label_subject))
+            self.paths_label_subject_mask = list(
+                filter(lambda item: item[2] in self.filtered_subjects, self.paths_label_subject_mask))
 
         if not self.exclude_classes == None:
-            self.paths_label_subject = list(
-                filter(lambda item: not self.isExcluded(item[1]), self.paths_label_subject))
+            self.paths_label_subject_mask = list(
+                filter(lambda item: not self.isExcluded(item[1]), self.paths_label_subject_mask))
 
         if normalize:
             mean, sd = None, None
@@ -150,14 +149,14 @@ class LungPetCtDxDataset(Dataset):
                 mean=mean, std=sd)
 
     def __len__(self):
-        return len(self.paths_label_subject)
+        return len(self.paths_label_subject_mask)
 
     def to_one_hot(self, label):
         return np.eye(len(self.class_names))[self.class_names.index(label)]
 
     def __getitem__(self, idx):
 
-        path, label, subject = self.paths_label_subject[idx]
+        path, label, subject, mask = self.paths_label_subject_mask[idx]
 
         # Read from path
         img = dcmread(path).pixel_array
@@ -172,6 +171,9 @@ class LungPetCtDxDataset(Dataset):
 
         # Convert to tensor with now proper Channel x Height x Width dimensions
         img = torch.from_numpy(img.astype(np.float32))
+        # Normalize tumor bounding box before transformation
+        _channels, sx, sy = img.shape
+        mask = np.array([mask[0] / sx, mask[1] / sy, mask[2] / sx, mask[3] / sy])
 
         if self._normalization_transform:
             img = self._normalization_transform(img)
@@ -180,7 +182,7 @@ class LungPetCtDxDataset(Dataset):
             img = self.post_normalize_transform(img)
 
         label_one_hot = self.to_one_hot(label)
-        return (img, label_one_hot)
+        return (img, label_one_hot, mask)
 
     def calculateMeanAndSD(self, batch_size=32, normalize=False):
         self._disable_transform_and_norm = True
