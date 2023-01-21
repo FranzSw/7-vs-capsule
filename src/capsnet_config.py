@@ -15,10 +15,12 @@ class Config:
         self.pc_in_channels = 256
         self.pc_out_channels = 32
         self.pc_kernel_size = 9
-        self.pc_num_routes = 32 * 8 * 8
+        #self.pc_num_routes = 32 * 8 * 8
+        self.pc_num_routes = 32 * 6 *6
         # Digit Capsule (dc)
         self.dc_num_capsules = dc_num_capsules
-        self.dc_num_routes = 32 * 8 * 8
+        self.dc_num_routes = 32 * 6 * 6
+        #self.dc_num_routes = 32 * 8 * 8
         self.dc_in_channels = dc_in_channels
         self.dc_out_channels = out_capsule_size
         # Decoder

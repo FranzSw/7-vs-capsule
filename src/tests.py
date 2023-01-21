@@ -1,5 +1,5 @@
 import unittest
-from lungpetctdx_dataset import LungPetCtDxDataset
+from lungpetctdx_dataset import LungPetCtDxDataset_TumorClass
 import os
 
 
@@ -10,7 +10,7 @@ class Test(unittest.TestCase):
 
         print("Cleared ds distribution cache. Calculating distribution from scratch...")
         # Force load ds mean and std
-        ds2 = LungPetCtDxDataset(normalize=True)
+        ds2 = LungPetCtDxDataset_TumorClass(normalize=True)
 
         print("Calculated ds distribution. Calculating distribution of normalized dataset (should be a standard normal distr.)...")
         # Calculate mean and sd of normalized dataset

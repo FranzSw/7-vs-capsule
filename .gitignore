@@ -6,3 +6,6 @@ settings.json
 cache/
 wandb
 *.png
+src/data
+
+results/
