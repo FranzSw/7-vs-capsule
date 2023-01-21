@@ -67,7 +67,7 @@ def load_binary_files_for_subject(subject_id: str) -> list[tuple[str, str, str, 
         label = "Tumor" if isTumor else "No Tumor"
 
 
-        dcm_path, dcm_name = available_dicom_files.get(k[:-4], (None, None))
+        dcm_path, dcm_name = v
         if dcm_path is None:
             continue
         bounding_box = annotations[k][0][:4] if isTumor else None

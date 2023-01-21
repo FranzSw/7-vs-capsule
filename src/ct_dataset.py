@@ -37,7 +37,7 @@ class CTDataSet(Dataset):
         normalize=False,
         max_size: int = -1,
         crop_to_tumor: bool = False,
-        cropped_tumor_size=128,
+        image_resolution=128,
         exclude_empty_bbox_samples=False
     ):
         # dirs = [d for d in os.listdir(datasetPath) if os.isdir(d)]
@@ -66,7 +66,8 @@ class CTDataSet(Dataset):
         self._force_normalize_for_dist_calc = False
         self._normalization_transform = None
         self.crop_to_tumor = crop_to_tumor
-        self.cropped_resize_transform = transforms.Resize(cropped_tumor_size)
+        self.resize_transform = transforms.Compose([transforms.Resize(image_resolution), transforms.CenterCrop(image_resolution)])
+
         self.load_paths_labels_subjects_mask(cache, normalize)
         if exclude_empty_bbox_samples:
             self.paths_label_subject_mask = list(
@@ -125,7 +126,7 @@ class CTDataSet(Dataset):
             with open(self.cache_file, "rb") as f:
                 self.paths_label_subject_mask = pickle.load(f)
         else:
-            self._get_paths_labels_subjects_mask()
+            self.paths_label_subject_mask = self._get_paths_labels_subjects_mask()
 
             if cache:
                 os.makedirs(self.cache_file.parent, exist_ok=True)
@@ -206,12 +207,14 @@ class CTDataSet(Dataset):
                 print("width and height of masked image are 0!")
             img = transforms.functional.crop(
                 img, int(y), int(x), int(size), int(size))
-            img = self.cropped_resize_transform(img)
+
             mask = np.array([0, 0, 1, 1])
         else:
-            mask = np.array([mask[0] / sx, mask[1] / sy,
-                             mask[2] / sx, mask[3] / sy])
 
+            mask = np.array([mask[0] / sx, mask[1] / sy,
+                             mask[2] / sx, mask[3] / sy]) if mask else np.array([0,0,1,1])
+
+        img = self.resize_transform(img)
         if self._normalization_transform:
             img = self._normalization_transform(img)
 
@@ -219,23 +222,27 @@ class CTDataSet(Dataset):
             not self._disable_transform_and_norm or self._force_normalize_for_dist_calc
         ):
             img = self.post_normalize_transform(img)
+        
+        img =(img)
+
 
         label_one_hot = self.to_one_hot(label)
         return (img, label_one_hot, mask)
 
-    def calculateMeanAndSD(self, batch_size=32, normalize=False):
+    def calculateMeanAndSD(self, batch_size=32*40, normalize=False):
         self._disable_transform_and_norm = True
         if normalize:
             self._force_normalize_for_dist_calc = True
 
         loader = DataLoader(self, batch_size=batch_size,
-                            num_workers=0, shuffle=False)
-
-        mean = torch.zeros(self.color_channels)
-        var = torch.zeros(self.color_channels)
+                            num_workers=8, shuffle=False)
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        mean = torch.zeros(self.color_channels).to(device)
+        var = torch.zeros(self.color_channels).to(device)
 
         numBatches = len(loader)
         for i, (images, _, _) in enumerate(loader):
+            images = images.to(device)
             batch_mean = images.mean((2, 3)).transpose(0, 1).mean(1)
             mean += batch_mean
             width = images.size(3)
@@ -260,7 +267,7 @@ class CTDataSet(Dataset):
             )
 
         print(f"Done with {numBatches}")
-        mean, sd = mean.div(numBatches), var.div(numBatches).sqrt()
+        mean, sd = mean.cpu().div(numBatches), var.cpu().div(numBatches).sqrt()
 
         print(f"Calculated mean: {mean}, sd: {sd}")
 
