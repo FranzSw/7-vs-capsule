@@ -212,7 +212,7 @@ class CTDataSet(Dataset):
         else:
 
             mask = np.array([mask[0] / sx, mask[1] / sy,
-                             mask[2] / sx, mask[3] / sy]) if mask else np.array([0,0,1,1])
+                             mask[2] / sx, mask[3] / sy]) if mask is not None else np.array([0,0,1,1], dtype=np.float)
 
         img = self.resize_transform(img)
         if self._normalization_transform:
@@ -229,7 +229,7 @@ class CTDataSet(Dataset):
         label_one_hot = self.to_one_hot(label)
         return (img, label_one_hot, mask)
 
-    def calculateMeanAndSD(self, batch_size=32*40, normalize=False):
+    def calculateMeanAndSD(self, batch_size=64, normalize=False):
         self._disable_transform_and_norm = True
         if normalize:
             self._force_normalize_for_dist_calc = True

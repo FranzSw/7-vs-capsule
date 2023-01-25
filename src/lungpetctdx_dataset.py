@@ -61,16 +61,15 @@ def load_binary_files_for_subject(subject_id: str) -> list[tuple[str, str, str, 
 
     available_dicom_files = getUID_path(os.path.join(dataset_path, "data", subject_id))
 
+    annotation_reverse_lookup = {k[:-4]: k for k,_ in annotations.items()}
     paths_label_subject_mask = []
-    for k, v in available_dicom_files.items():
-        isTumor =  k in annotations
+    for dcm_id, (dcm_path, dcm_name) in available_dicom_files.items():
+        isTumor =  dcm_id in annotation_reverse_lookup.keys()
+        annotation_id = annotation_reverse_lookup[dcm_id] if isTumor else None
         label = "Tumor" if isTumor else "No Tumor"
-
-
-        dcm_path, dcm_name = v
         if dcm_path is None:
             continue
-        bounding_box = annotations[k][0][:4] if isTumor else None
+        bounding_box = annotations[annotation_id][0][:4] if isTumor else None
         paths_label_subject_mask.append((dcm_path, label, subject_id, bounding_box))
 
     return paths_label_subject_mask
@@ -158,6 +157,11 @@ class LungPetCtDxDataset_TumorPresence(CTDataSet):
 
     def _get_paths_labels_subjects_mask(self):
         paths_label_subject_mask = []
+
+        #  Not parallel (for debugging):
+        # paths_label_subject_mask = list(map(load_binary_files_for_subject, self.all_subjects))
+
+        # Parallel:
         with ProcessPoolExecutor(max_workers=8) as executor:
             for r in executor.map(load_binary_files_for_subject, self.all_subjects):
                 paths_label_subject_mask += r
