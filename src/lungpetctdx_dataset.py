@@ -12,6 +12,7 @@ from typing import Union
 from loading.getUID import *
 from ct_dataset import CTDataSet
 from pathlib import Path
+from ct_dataset import NormalizationMethods
 
 dataset_path = "/dhc/dsets/Lung-PET-CT-Dx"
 num_classes = 4
@@ -99,7 +100,7 @@ class LungPetCtDxDataset_TumorClass(CTDataSet):
         cache=True,
         subject_count=None,
         exclude_classes: Union[list[str], None] = None,
-        normalize=False,
+        normalize: Union[NormalizationMethods, None] = None,
         max_size: int = -1,
         crop_to_tumor: bool = False,
         cropped_tumor_size=128,
@@ -139,7 +140,7 @@ class LungPetCtDxDataset_TumorPresence(CTDataSet):
         post_normalize_transform=None,
         cache=True,
         subject_count=None,
-        normalize=False,
+        normalize: Union[NormalizationMethods, None] = None,
         max_size: int = -1
     ):
         super().__init__(

@@ -12,6 +12,7 @@ from typing import Union
 from loading.getUID import *
 from abc import abstractmethod
 from pathlib import Path
+from enum import Enum
 
 
 def isNotEmptyMask(path_label_subject_mask):
@@ -19,6 +20,23 @@ def isNotEmptyMask(path_label_subject_mask):
     xmin, ymin, xmax, ymax = mask
     w, h = int(xmax-xmin), int(ymax-ymin)
     return w != 0 and h != 0
+
+
+class NormalizationMethods(Enum):
+    SINGLE_IMAGE = "NORMALIZE_SINGLE_IMAGE"
+    WHOLE_DATASET = "NORMALIZE_WHOLE_DATASET"
+
+
+def calculate_meanstd(t: np.ndarray, axis=None):
+    mean = np.mean(t, axis=axis, keepdims=True)
+    std = np.sqrt(((t - mean)**2).mean(axis=axis, keepdims=True))
+    return mean, std
+
+
+def normalize_meanstd(t: np.ndarray, axis=None):
+    # axis param denotes axes along which mean & std reductions are to be performed
+    mean, std = calculate_meanstd(t, axis)
+    return (t - mean) / std
 
 
 class CTDataSet(Dataset):
@@ -34,7 +52,7 @@ class CTDataSet(Dataset):
         cache=True,
         subject_count=None,
         exclude_classes: Union[list[str], None] = None,
-        normalize=False,
+        normalize: Union[NormalizationMethods, None] = None,
         max_size: int = -1,
         crop_to_tumor: bool = False,
         image_resolution=128,
@@ -66,13 +84,15 @@ class CTDataSet(Dataset):
         self._force_normalize_for_dist_calc = False
         self._normalization_transform = None
         self.crop_to_tumor = crop_to_tumor
-        self.resize_transform = transforms.Compose([transforms.Resize(image_resolution), transforms.CenterCrop(image_resolution)])
+        self.resize_transform = transforms.Compose(
+            [transforms.Resize(image_resolution), transforms.CenterCrop(image_resolution)])
 
+        self.normalize = normalize
         self.load_paths_labels_subjects_mask(cache, normalize)
         if exclude_empty_bbox_samples:
             self.paths_label_subject_mask = list(
                 filter(isNotEmptyMask, self.paths_label_subject_mask))
-        if normalize:
+        if normalize == NormalizationMethods.WHOLE_DATASET:
             mean, sd = None, None
             if cache and os.path.exists(self.data_distribution_cache_file):
                 with open(self.data_distribution_cache_file, "rb") as f:
@@ -120,8 +140,8 @@ class CTDataSet(Dataset):
         weights = 1.0 / weights
         weights = weights / weights.sum()
         return torch.tensor(weights)
-    
-    def load_paths_labels_subjects_mask(self, cache, normalize):
+
+    def load_paths_labels_subjects_mask(self, cache, normalize: Union[NormalizationMethods, None] = None):
         if cache and os.path.exists(self.cache_file):
             with open(self.cache_file, "rb") as f:
                 self.paths_label_subject_mask = pickle.load(f)
@@ -151,7 +171,7 @@ class CTDataSet(Dataset):
                 )
             )
 
-        if normalize:
+        if normalize == NormalizationMethods.WHOLE_DATASET:
             mean, sd = None, None
             if cache and os.path.exists(self.data_distribution_cache_file):
                 with open(self.data_distribution_cache_file, "rb") as f:
@@ -164,10 +184,9 @@ class CTDataSet(Dataset):
             self._normalization_transform = transforms.Normalize(
                 mean=mean, std=sd)
 
-
     @abstractmethod
     def _get_paths_labels_subjects_mask(self) -> list[tuple[str, str, str, tuple[float, float, float, float]]]:
-       pass
+        pass
 
     def __len__(self):
         return len(self.paths_label_subject_mask)
@@ -190,10 +209,12 @@ class CTDataSet(Dataset):
         else:
             raise Exception(f"Unknown shape of dicom: {img.shape}")
 
+        if self.normalize == NormalizationMethods.SINGLE_IMAGE:
+            img = normalize_meanstd(img.astype(np.float64), axis=(1, 2))
         # Convert to tensor with now proper Channel x Height x Width dimensions
         img = torch.from_numpy(img.astype(np.float32))
-        # Normalize tumor bounding box before transformation
 
+        # Normalize tumor bounding box before transformation
         _channels, sx, sy = img.shape
 
         if self.crop_to_tumor:
@@ -212,7 +233,7 @@ class CTDataSet(Dataset):
         else:
 
             mask = np.array([mask[0] / sx, mask[1] / sy,
-                             mask[2] / sx, mask[3] / sy]) if mask is not None else np.array([0,0,1,1], dtype=np.float)
+                             mask[2] / sx, mask[3] / sy]) if mask is not None else np.array([0, 0, 1, 1], dtype=np.float)
 
         img = self.resize_transform(img)
         if self._normalization_transform:
@@ -222,9 +243,8 @@ class CTDataSet(Dataset):
             not self._disable_transform_and_norm or self._force_normalize_for_dist_calc
         ):
             img = self.post_normalize_transform(img)
-        
-        img =(img)
 
+        img = (img)
 
         label_one_hot = self.to_one_hot(label)
         return (img, label_one_hot, mask)

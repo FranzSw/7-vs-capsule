@@ -1,10 +1,10 @@
 from dataclasses import dataclass
-
-
+from typing import Union
+import torch
 @dataclass
 class Config:
     model_name: str = 'Capsnet'
-    def __init__(self, dc_num_capsules=4, input_width=32, input_height= 32, reconstruction_loss_factor = 0.0005, cnn_in_channels=3, dc_in_channels=8, out_capsule_size=16):
+    def __init__(self, dc_num_capsules=4, input_width=32, input_height= 32, reconstruction_loss_factor = 0.0005, cnn_in_channels=3, dc_in_channels=8, out_capsule_size=16, class_weights: Union[torch.Tensor, None] = None):
        
         # CNN 
         self.cnn_in_channels = cnn_in_channels
@@ -27,5 +27,6 @@ class Config:
         self.input_height = input_height  
         self.reconstruction_loss_factor = reconstruction_loss_factor
         
+        self.class_weights = class_weights
       
     
