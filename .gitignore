@@ -9,3 +9,5 @@ wandb
 src/data
 
 results/
+
+temp_best_model.pt

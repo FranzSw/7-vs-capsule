@@ -1,0 +1,18 @@
+program: hyperparameter.py
+method: bayes
+metric:
+  name: accuracy
+  goal: maximize
+parameters:
+  learning_rate:
+    distribution: uniform
+    min: 0.0001
+    max: 0.1
+  reconstruction_loss_factor:
+    distribution: uniform
+    min: 0
+    max: 0.4
+  out_capsule_size:
+    values: [16, 32]
+  iterations:
+    values: [3, 4, 5]
