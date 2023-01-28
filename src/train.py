@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 import copy
+from model.capsnet_em import CapsNet_Em
 from utils.wandb import wandb_log
 import numpy as np
 import torch
@@ -18,7 +19,7 @@ def predicted_indices_from_outputs(outputs):
     return torch.squeeze(max_length_indices, -1)
 
 
-def train_model(model: CapsNet, scheduler: _LRScheduler, trainLoader: DataLoader,valLoader: DataLoader, num_epochs=2, on_epoch_done: Union[Callable[[dict[str, float]], None], None] = None, on_batch_done: Callable[[dict[str, float]], None] = None):
+def train_model(model: Union[CapsNet, CapsNet_Em], scheduler: _LRScheduler, trainLoader: DataLoader,valLoader: DataLoader, num_epochs=2, on_epoch_done: Union[Callable[[dict[str, float]], None], None] = None, on_batch_done: Callable[[dict[str, float]], None] = None):
     since = time.time()
     optimizer = scheduler.optimizer
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -72,7 +73,10 @@ def train_model(model: CapsNet, scheduler: _LRScheduler, trainLoader: DataLoader
                 with torch.set_grad_enabled(phase == 'train'):
                     outputs, reconstructions, _ = model(inputs)
                     preds = predicted_indices_from_outputs(outputs)
-                    loss, classification_loss, reconstruction_loss = model.loss(reconstruction_target_images, outputs, labels, reconstructions, CEL_for_classifier=True)
+                    if isinstance(model, CapsNet):
+                        loss, classification_loss, reconstruction_loss = model.loss(reconstruction_target_images, outputs, labels, reconstructions, CEL_for_classifier=True)
+                    elif isinstance(model, CapsNet_Em):
+                        loss = model.loss(idx, len(dataloaders[phase]), epoch, num_epochs, outputs, labels)
 
                     # backward + optimize only if in training phase
                     if phase == 'train':

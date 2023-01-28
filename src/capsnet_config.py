@@ -30,5 +30,18 @@ class Config:
         self.reconstruction_loss_factor = reconstruction_loss_factor
         
         self.class_weights = class_weights
-      
-    
+
+   
+@dataclass
+class EM_Config:
+    model_name: str = 'CapsNet_Em'
+
+    def __init__(self, A: int = 32, B: int = 32, C: int = 32, D:int = 32, E:int = 2, K: int = 3, P: int = 4, iters: int = 3):
+        self.A = A
+        self.B = B
+        self.C = C
+        self.D = D
+        self.E = E
+        self.K = K
+        self.P = P
+        self.iters = iters
