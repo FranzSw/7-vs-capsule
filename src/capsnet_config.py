@@ -4,7 +4,7 @@ import torch
 @dataclass
 class Config:
     model_name: str = 'Capsnet'
-    def __init__(self, dc_num_capsules=4, input_width=32, input_height= 32, reconstruction_loss_factor = 0.0005, cnn_in_channels=3, dc_in_channels=8, out_capsule_size=16, class_weights: Union[torch.Tensor, None] = None):
+    def __init__(self, dc_num_capsules=4, input_width=32, input_height= 32, reconstruction_loss_factor = 0.0005, cnn_in_channels=3, dc_in_channels=8, out_capsule_size=16, class_weights: Union[torch.Tensor, None] = None, num_iterations: int = 3):
        
         # CNN 
         self.cnn_in_channels = cnn_in_channels
@@ -22,6 +22,8 @@ class Config:
         self.dc_num_routes = 32 * 8 * 8
         self.dc_in_channels = dc_in_channels
         self.dc_out_channels = out_capsule_size
+        self.dc_num_iterations = num_iterations
+
         # Decoder
         self.input_width = input_width
         self.input_height = input_height  

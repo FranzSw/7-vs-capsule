@@ -42,12 +42,13 @@ class PrimaryCaps(nn.Module):
 
 
 class DigitCaps(nn.Module):
-    def __init__(self, num_capsules=10, num_routes=32 * 6 * 6, in_channels=8, out_channels=16):
+    def __init__(self, num_capsules=10, num_routes=32 * 6 * 6, in_channels=8, out_channels=16, num_iterations=3):
         super(DigitCaps, self).__init__()
 
         self.in_channels = in_channels
         self.num_routes = num_routes
         self.num_capsules = num_capsules
+        self.num_iterations = num_iterations
 
         self.W = nn.Parameter(torch.randn(1, num_routes, num_capsules, out_channels, in_channels))
 
@@ -122,7 +123,7 @@ class CapsNet(nn.Module):
             self.primary_capsules = PrimaryCaps(config.pc_num_capsules, config.pc_in_channels, config.pc_out_channels,
                                                 config.pc_kernel_size, config.pc_num_routes)
             self.digit_capsules = DigitCaps(config.dc_num_capsules, config.dc_num_routes, config.dc_in_channels,
-                                            config.dc_out_channels)
+                                            config.dc_out_channels, config.dc_num_iterations)
             self.decoder = Decoder(config.input_width, config.input_height, config.cnn_in_channels, config.dc_num_capsules, config.dc_out_channels)
             self.reconstruction_loss_factor = config.reconstruction_loss_factor
 
