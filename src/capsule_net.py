@@ -127,7 +127,7 @@ class CapsNet(nn.Module):
             self.reconstruction_loss_factor = config.reconstruction_loss_factor
 
         self.mse_loss = nn.MSELoss()
-        self.ce_loss = nn.CrossEntropyLoss()
+        self.ce_loss = nn.CrossEntropyLoss(weight=config.class_weights)
 
     def forward(self, data):
         output = self.digit_capsules(self.primary_capsules(self.conv_layer(data)))
@@ -144,7 +144,7 @@ class CapsNet(nn.Module):
         batch_size = x.size(0)
         v_c = torch.sqrt((x ** 2).sum(dim=2, keepdim=True)).view(batch_size,-1)
 
-        return self.ce_loss(v_c, labels)
+        return self.ce_loss(torch.nn.Softmax(-1)(v_c), labels)
 
     def margin_loss(self, x, labels, size_average=True):
         batch_size = x.size(0)

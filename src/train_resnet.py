@@ -10,7 +10,7 @@ from torchvision import transforms
 import matplotlib.pyplot as plt
 import time
 import copy
-from lungpetctdx_dataset import LungPetCtDxDataset, all_class_names
+from lungpetctdx_dataset import LungPetCtDxDataset_TumorClass as DS
 
 from tqdm import tqdm
 
@@ -59,7 +59,7 @@ def create_splitted_dataset():
         # transforms.ToTensor(),
     ])
 
-    trainSet, valSet = LungPetCtDxDataset(post_normalize_transform=preprocess, exclude_classes=[all_class_names[1],all_class_names[2]]).subject_split(test_size=0.2)
+    trainSet, valSet = DS(post_normalize_transform=preprocess, exclude_classes=[DS.all_tumor_class_names[1],DS.all_tumor_class_names[2]]).subject_split(test_size=0.2)
     return trainSet, valSet
 
 def create_dataloaders(trainSet: Subset, valSet: Subset):
@@ -169,7 +169,7 @@ def train_model(dataloaders, class_names, model, criterion, optimizer, scheduler
 def main():
     trainSet, valSet = create_splitted_dataset()
     dataloaders = create_dataloaders(trainSet, valSet)
-    class_names = [all_class_names[0], all_class_names[3]]
+    class_names = [DS.all_tumor_class_names[0], DS.all_tumor_class_names[3]]
     num_classes = len(class_names)
     # dataset_sizes = {"train": len(trainSet),"val": len(valSet)}
 
