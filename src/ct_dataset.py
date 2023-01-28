@@ -114,7 +114,7 @@ class CTDataSet(Dataset):
     def subject_split(self, test_size: float):
         subj_train, subj_test = train_test_split(
             self.all_subjects
-            if self.filtered_subjects == None
+            if self.filtered_subjects is None
             else self.filtered_subjects,
             test_size=test_size,
             random_state=42,
@@ -155,7 +155,7 @@ class CTDataSet(Dataset):
                     pickle.dump(
                         self.paths_label_subject_mask, f, pickle.HIGHEST_PROTOCOL
                     )
-        if not self.filtered_subjects == None:
+        if self.filtered_subjects is not None:
             self.paths_label_subject_mask = list(
                 filter(
                     lambda item: item[2] in self.filtered_subjects,
