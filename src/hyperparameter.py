@@ -104,7 +104,8 @@ def run_train_experiment(config: dict = None):
                         preds=best_acc_y_pred.tolist(),
                         y_true=best_acc_y_true.tolist(),
                         class_names=ds.class_names,
-                    )
+                    ),
+                    "best_accuracy": best_acc,
                 }
             )
         del model

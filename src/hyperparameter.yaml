@@ -1,7 +1,7 @@
 program: hyperparameter.py
 method: bayes
 metric:
-  name: accuracy
+  name: best_accuracy
   goal: maximize
 parameters:
   learning_rate:
