@@ -48,22 +48,16 @@ class CTDataSet(Dataset):
         self,
         all_classes: list[str],
         dataset_path: str,
-        post_normalize_transform=None,
         cache=True,
         subject_count=None,
         exclude_classes: Union[list[str], None] = None,
-        normalize: Union[NormalizationMethods, None] = None,
         max_size: int = -1,
-        crop_to_tumor: bool = False,
-        image_resolution=128,
         exclude_empty_bbox_samples=False
     ):
         # dirs = [d for d in os.listdir(datasetPath) if os.isdir(d)]
         self.cache_file = Path(
             f"../cache/{type(self).__name__}_metadata.pickle")
-        self.data_distribution_cache_file = Path(
-            f"../cache/{type(self).__name__}_dataset_distribution.pickle" if not crop_to_tumor else f"../cache/{type(self).__name__}_cropped_dataset_distribution.pickle"
-        )
+    
         self.exclude_classes = exclude_classes
         self.class_names = list(
             filter(lambda item: not self.isExcluded(item), all_classes)
@@ -78,32 +72,11 @@ class CTDataSet(Dataset):
             self.filtered_subjects = self.all_subjects[:subject_count]
 
         self.paths_label_subject_mask = []
+        self.load_paths_labels_subjects_mask(cache)
 
-        self.post_normalize_transform = post_normalize_transform
-        self._disable_transform_and_norm = False
-        self._force_normalize_for_dist_calc = False
-        self._normalization_transform = None
-        self.crop_to_tumor = crop_to_tumor
-        self.resize_transform = transforms.Compose(
-            [transforms.Resize(image_resolution), transforms.CenterCrop(image_resolution)])
-
-        self.normalize = normalize
-        self.load_paths_labels_subjects_mask(cache, normalize)
         if exclude_empty_bbox_samples:
             self.paths_label_subject_mask = list(
                 filter(isNotEmptyMask, self.paths_label_subject_mask))
-        if normalize == NormalizationMethods.WHOLE_DATASET:
-            mean, sd = None, None
-            if cache and os.path.exists(self.data_distribution_cache_file):
-                with open(self.data_distribution_cache_file, "rb") as f:
-                    mean, sd = pickle.load(f)
-            else:
-                mean, sd = self.calculateMeanAndSD()
-                if cache:
-                    with open(self.data_distribution_cache_file, "wb") as f:
-                        pickle.dump((mean, sd), f, pickle.HIGHEST_PROTOCOL)
-            self._normalization_transform = transforms.Normalize(
-                mean=mean, std=sd)
 
         if max_size != -1:
             self.paths_label_subject_mask = self.paths_label_subject_mask[:max_size]
@@ -141,7 +114,7 @@ class CTDataSet(Dataset):
         weights = weights / weights.sum()
         return torch.tensor(weights)
 
-    def load_paths_labels_subjects_mask(self, cache, normalize: Union[NormalizationMethods, None] = None):
+    def load_paths_labels_subjects_mask(self, cache):
         if cache and os.path.exists(self.cache_file):
             with open(self.cache_file, "rb") as f:
                 self.paths_label_subject_mask = pickle.load(f)
@@ -171,6 +144,64 @@ class CTDataSet(Dataset):
                 )
             )
 
+    @abstractmethod
+    def _get_paths_labels_subjects_mask(self) -> list[tuple[str, str, str, tuple[float, float, float, float]]]:
+        pass
+
+    def __len__(self):
+        return len(self.paths_label_subject_mask)
+
+    def to_one_hot(self, label):
+        return np.eye(len(self.class_names))[self.class_names.index(label)]
+
+    @abstractmethod
+    def __getitem__(self, idx) -> tuple[torch.Tensor, torch.Tensor, np.ndarray]:
+        pass
+
+class CTDataSet2D(CTDataSet):
+    """Lung-PET-CT-Dx dataset."""
+
+    color_channels = 3
+
+    def __init__(
+        self,
+        all_classes: list[str],
+        dataset_path: str,
+        post_normalize_transform=None,
+        cache=True,
+        subject_count=None,
+        exclude_classes: Union[list[str], None] = None,
+        normalize: Union[NormalizationMethods, None] = None,
+        max_size: int = -1,
+        crop_to_tumor: bool = False,
+        image_resolution=128,
+        exclude_empty_bbox_samples=False
+    ):
+        super().__init__(
+            all_classes,
+            dataset_path,
+            cache,
+            subject_count,
+            exclude_classes,
+            max_size,
+            exclude_empty_bbox_samples,
+        )
+      
+        self.data_distribution_cache_file = Path(
+            f"../cache/{type(self).__name__}_dataset_distribution.pickle" if not crop_to_tumor else f"../cache/{type(self).__name__}_cropped_dataset_distribution.pickle"
+        )
+
+
+        self.post_normalize_transform = post_normalize_transform
+        self._disable_transform_and_norm = False
+        self._force_normalize_for_dist_calc = False
+        self._normalization_transform = None
+        self.crop_to_tumor = crop_to_tumor
+        self.resize_transform = transforms.Compose(
+            [transforms.Resize(image_resolution), transforms.CenterCrop(image_resolution)])
+
+        self.normalize = normalize
+        
         if normalize == NormalizationMethods.WHOLE_DATASET:
             mean, sd = None, None
             if cache and os.path.exists(self.data_distribution_cache_file):
@@ -187,12 +218,6 @@ class CTDataSet(Dataset):
     @abstractmethod
     def _get_paths_labels_subjects_mask(self) -> list[tuple[str, str, str, tuple[float, float, float, float]]]:
         pass
-
-    def __len__(self):
-        return len(self.paths_label_subject_mask)
-
-    def to_one_hot(self, label):
-        return np.eye(len(self.class_names))[self.class_names.index(label)]
 
     def __getitem__(self, idx):
 

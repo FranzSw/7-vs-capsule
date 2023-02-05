@@ -10,10 +10,10 @@ from torchvision import transforms
 from loading.get_data_from_XML import *
 from typing import Union
 from loading.getUID import *
-from ct_dataset import CTDataSet
+from ct_dataset import CTDataSet2D, CTDataSet
 from pathlib import Path
 from ct_dataset import NormalizationMethods
-
+from typing import cast
 dataset_path = "/dhc/dsets/Lung-PET-CT-Dx"
 num_classes = 4
 
@@ -31,6 +31,55 @@ def get_xml_files(subject_ids):
     )
     return list(filter(lambda tuple: os.path.exists(tuple[1]), ids_folders))
 
+import sys
+def load_3d_files_for_subject(subject_id: str) -> list[tuple[str, str, str, list[Union[int, float]]]]:
+    print(f"Loading subject {subject_id}")
+    folder = os.path.join(dataset_path, "labels", shortId(subject_id))
+    if not os.path.exists(folder):
+        return []
+    annotations = XML_preprocessor(folder, num_classes=num_classes).data
+  
+    
+    available_dicom_files = getUID_path(os.path.join(dataset_path, "data", subject_id))
+
+    label = None
+    min = -sys.maxsize+1
+    max = sys.maxsize
+    xmin, ymin, zmin, xmax, ymax, zmax = float(max), float(max), max, float(min), float(min), min 
+    for k, v in annotations.items():
+        dcm_path, _ = available_dicom_files.get(k[:-4], (None, None))
+        if dcm_path is None:
+            continue
+        
+
+        current_label = LungPetCtDxDataset_TumorClass3D.all_tumor_class_names[np.argmax(v[0][-LungPetCtDxDataset_TumorClass3D.num_classes:])]
+        if current_label != None:
+            if label != None and current_label != label:
+                raise Exception(f"Found different labels in same scan: {label} and {current_label}")
+            label = current_label
+
+        z = int(Path(dcm_path).stem.split("-")[1])
+        _xmin, _ymin, _xmax, _ymax  = cast(tuple[float, float, float, float],v[0][:4] )
+        if _xmin < xmin:
+            xmin = _xmin
+        if _ymin < ymin:
+            ymin = _ymin
+        if z < zmin:
+            zmin = z
+
+        if _xmax > xmax:
+            xmax = _xmax
+        if _ymax < ymax:
+            ymax = _ymax
+        if z > zmax:
+            zmax = z     
+
+    if label == None:
+        print(f"Scan for subject {subject_id} has no label. Skipping")
+        return []
+        #raise Exception(f"Scan for subject {subject_id} has no label.")   
+    bbox = [xmin, ymin, zmin, xmax, ymax, zmax]
+    return  [(folder, label, subject_id, bbox)]
 
 def load_files_for_subject(subject_id: str) -> list[tuple[str, str, str, list[int]]]:
     print(f"Loading subject {subject_id}")
@@ -82,7 +131,7 @@ def isNotEmptyMask(path_label_subject_mask):
     return w != 0 and h != 0
 
 
-class LungPetCtDxDataset_TumorClass(CTDataSet):
+class LungPetCtDxDataset_TumorClass(CTDataSet2D):
     """Lung-PET-CT-Dx dataset."""
     all_tumor_class_names = [
         "Adenocarcinoma",
@@ -129,7 +178,7 @@ class LungPetCtDxDataset_TumorClass(CTDataSet):
         return paths_label_subject_mask
     
 
-class LungPetCtDxDataset_TumorPresence(CTDataSet):
+class LungPetCtDxDataset_TumorPresence(CTDataSet2D):
     """Lung-PET-CT-Dx dataset."""
 
     color_channels = 3
@@ -167,3 +216,46 @@ class LungPetCtDxDataset_TumorPresence(CTDataSet):
             for r in executor.map(load_binary_files_for_subject, self.all_subjects):
                 paths_label_subject_mask += r
         return paths_label_subject_mask
+
+
+class LungPetCtDxDataset_TumorClass3D(CTDataSet):
+    """Lung-PET-CT-Dx dataset."""
+    all_tumor_class_names = [
+        "Adenocarcinoma",
+        "Small Cell Carcinoma",
+        "Large Cell Carcinoma",
+        "Squamous Cell Carcinoma",
+    ]
+    num_classes = 4
+    color_channels = 3
+
+    def __init__(
+        self,
+        dataset_path: str = dataset_path,
+        cache=True,
+        subject_count=None,
+        exclude_classes: Union[list[str], None] = None,
+        max_size: int = -1,
+        exclude_empty_bbox_samples=False,
+    ):
+        super().__init__(
+            LungPetCtDxDataset_TumorClass3D.all_tumor_class_names,
+            dataset_path,
+            cache,
+            subject_count,
+            exclude_classes,
+            max_size,
+            exclude_empty_bbox_samples,
+        )
+    
+
+    def _get_paths_labels_subjects_mask(self):
+        paths_label_subject_mask = []
+        with ProcessPoolExecutor(max_workers=4) as executor:
+            for r in executor.map(load_3d_files_for_subject, self.all_subjects):
+                paths_label_subject_mask += r
+        return paths_label_subject_mask
+
+
+    def __getitem__(self, idx):
+        pass
