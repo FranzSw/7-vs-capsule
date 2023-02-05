@@ -14,8 +14,9 @@ from capsule_net import CapsNet
 from typing import Callable, Union
 
 def predicted_indices_from_outputs(outputs):
-    classes = torch.sqrt((outputs ** 2).sum(2))
-    _, max_length_indices = classes.max(dim=1)
+    if len(outputs.shape) > 2:
+        outputs = torch.sqrt((outputs ** 2).sum(2))
+    _, max_length_indices = outputs.max(dim=1)
     return torch.squeeze(max_length_indices, -1)
 
 
@@ -72,6 +73,7 @@ def train_model(model: Union[CapsNet, CapsNet_Em], scheduler: _LRScheduler, trai
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
                     outputs, reconstructions, _ = model(inputs)
+                    print(outputs)
                     preds = predicted_indices_from_outputs(outputs)
                     if isinstance(model, CapsNet):
                         loss, classification_loss, reconstruction_loss = model.loss(reconstruction_target_images, outputs, labels, reconstructions, CEL_for_classifier=True)

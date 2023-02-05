@@ -76,9 +76,10 @@ class ConvCaps(nn.Module):
     """
 
     def __init__(
-        self, B=32, C=32, K=3, P=4, stride=2, iters=3, coor_add=False, w_shared=False
+        self, B=32, C=32, K=3, P=4, stride=2, iters=3, coor_add=False, w_shared=False, device='cuda'
     ):
         super(ConvCaps, self).__init__()
+        self.dev = device
         # TODO: lambda scheduler
         # Note that .contiguous() for 3+ dimensional tensors is very slow
         self.B = B
@@ -93,7 +94,7 @@ class ConvCaps(nn.Module):
         # constant
         self.eps = 1e-8
         self._lambda = 1e-03
-        self.ln_2pi = torch.cuda.FloatTensor(1).fill_(math.log(2 * math.pi))
+        self.ln_2pi = torch.cuda.FloatTensor(1).fill_(math.log(2 * math.pi)).to(device)
         # params
         # Note that \beta_u and \beta_a are per capsule type,
         # which are stated at https://openreview.net/forum?id=HJWLfGWRb&noteId=rJUY2VdbM
@@ -192,7 +193,7 @@ class ConvCaps(nn.Module):
         assert c == C
         assert (b, B, 1) == a_in.shape
 
-        r = torch.cuda.FloatTensor(b, B, C).fill_(1.0 / C)
+        r = torch.cuda.FloatTensor(b, B, C, device=self.dev).fill_(1.0 / C).to(self.dev)
         for iter_ in range(self.iters):
             a_out, mu, sigma_sq = self.m_step(a_in, r, v, eps, b, B, C, psize)
             if iter_ < self.iters - 1:
@@ -253,8 +254,8 @@ class ConvCaps(nn.Module):
         assert h == w
         v = v.view(b, h, w, B, C, psize)
         coor = torch.arange(h, dtype=torch.float32) / h
-        coor_h = torch.cuda.FloatTensor(1, h, 1, 1, 1, self.psize).fill_(0.0)
-        coor_w = torch.cuda.FloatTensor(1, 1, w, 1, 1, self.psize).fill_(0.0)
+        coor_h = torch.cuda.FloatTensor(1, h, 1, 1, 1, self.psize, device=self.dev).fill_(0.0).to(self.dev)
+        coor_w = torch.cuda.FloatTensor(1, 1, w, 1, 1, self.psize, device=self.dev).fill_(0.0).to(self.dev)
         coor_h[0, :, 0, 0, 0, 0] = coor
         coor_w[0, 0, :, 0, 0, 1] = coor
         v = v + coor_h + coor_w
@@ -336,7 +337,7 @@ class CapsNet_Em(nn.Module):
         ...
     """
 
-    def __init__(self, config: EM_Config):
+    def __init__(self, config: EM_Config, dev1, dev2):
         A = config.A
         B = config.B
         C = config.C
@@ -346,31 +347,43 @@ class CapsNet_Em(nn.Module):
         P = config.P
         iters = config.iters
         super(CapsNet_Em, self).__init__()
+        self.dev1 = dev1
+        self.dev2 = dev2
         self.conv1 = nn.Conv2d(
             in_channels=1, out_channels=A, kernel_size=5, stride=2, padding=2
-        )
-        self.bn1 = nn.BatchNorm2d(num_features=A, eps=0.001, momentum=0.1, affine=True)
-        self.relu1 = nn.ReLU(inplace=False)
-        self.primary_caps = PrimaryCaps(A, B, 1, P, stride=1)
-        self.conv_caps1 = ConvCaps(B, C, K, P, stride=2, iters=iters)
-        self.conv_caps2 = ConvCaps(C, D, K, P, stride=1, iters=iters)
+        ).to(dev1)
+        self.bn1 = nn.BatchNorm2d(num_features=A, eps=0.001, momentum=0.1, affine=True).to(dev1)
+        self.relu1 = nn.ReLU(inplace=False).to(dev1)
+        self.primary_caps = PrimaryCaps(A, B, 1, P, stride=1).to(dev1)
+        self.conv_caps1 = ConvCaps(B, C, K, P, stride=2, iters=iters, device=dev1).to(dev1)
+        self.conv_caps2 = ConvCaps(C, D, K, P, stride=1, iters=iters, device=dev2).to(dev2)
         self.class_caps = ConvCaps(
-            D, E, 1, P, stride=1, iters=iters, coor_add=True, w_shared=True
-        )
+            D, E, 1, P, stride=1, iters=iters, coor_add=True, w_shared=True, device=dev2
+        ).to(dev2)
 
-        self.criterion = SpreadLoss(num_class=E, m_min=0.2, m_max=0.9)
+        self.criterion = SpreadLoss(num_class=E, m_min=0.2, m_max=0.9, device=dev2).to(dev2)
 
     def forward(self, x):
+        o = x
+        print('Beep1')
         x = self.conv1(x)
+        print('Beep2')
         x = self.bn1(x)
+        print('Beep3')
         x = self.relu1(x)
+        print('Beep4')
         x = self.primary_caps(x)
-        x = self.conv_caps1(x)
+        print('Beep5')
+
+        x = self.conv_caps1(x).to(self.dev2)
+        print('Beep6')
         x = self.conv_caps2(x)
         x = self.class_caps(x)
-        return x
+        return x, o, 0
 
     def loss(self, batch_idx, num_batches, epoch_idx, num_epochs, pred, label):
+        print('BÖÖP')
+        print(pred, label)
         r = (1.0 * batch_idx + (epoch_idx - 1) * num_batches) / (
             num_epochs * num_batches
         )
