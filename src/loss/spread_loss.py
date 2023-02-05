@@ -11,20 +11,23 @@ class SpreadLoss(_Loss):
         self.num_class = num_class
 
     def forward(self, x, target, r):
+        # print('X', x)
         b, E = x.shape
         assert E == self.num_class
         margin = self.m_min + (self.m_max - self.m_min)*r
 
         x = x.to(self.dev)
         at = torch.cuda.FloatTensor(b).fill_(0).to(self.dev)
-        print('MEEP')
-        print(at)
+        # print('MEEP')
+        # print(self.dev)
+        # print('X2', x, x.shape)
+        # print('At', at, at.shape)
         target = torch.argmax(target, dim=1)
-        print(target)
         for i, lb in enumerate(target):
-            idx = torch.LongTensor(i).to(self.dev)
+            idx = torch.tensor(i, dtype=torch.long).to(self.dev)
             lbx = lb.to(self.dev)
-            print(lb)
+            # print('X3', x)
+            # print(idx, lbx)
             at[idx] = x[idx][lbx]
         at = at.view(b, 1).repeat(1, E)
 

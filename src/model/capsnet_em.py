@@ -365,30 +365,24 @@ class CapsNet_Em(nn.Module):
 
     def forward(self, x):
         o = x
-        print('Beep1')
         x = self.conv1(x)
-        print('Beep2')
         x = self.bn1(x)
-        print('Beep3')
         x = self.relu1(x)
-        print('Beep4')
         x = self.primary_caps(x)
-        print('Beep5')
 
         x = self.conv_caps1(x).to(self.dev2)
-        print('Beep6')
         x = self.conv_caps2(x)
         x = self.class_caps(x)
         return x, o, 0
 
     def loss(self, batch_idx, num_batches, epoch_idx, num_epochs, pred, label):
-        print('BÖÖP')
-        print(pred, label)
+        # print('BÖÖP')
+        # print('Pred', pred, 'Label', label)
         r = (1.0 * batch_idx + (epoch_idx - 1) * num_batches) / (
             num_epochs * num_batches
         )
         loss = self.criterion(pred, label, r)
-        return loss, loss, torch.Tensor(0)
+        return loss
 
 
 """

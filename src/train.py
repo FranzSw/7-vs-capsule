@@ -73,13 +73,14 @@ def train_model(model: Union[CapsNet, CapsNet_Em], scheduler: _LRScheduler, trai
                 # track history if only in train
                 with torch.set_grad_enabled(phase == 'train'):
                     outputs, reconstructions, _ = model(inputs)
-                    print(outputs)
                     preds = predicted_indices_from_outputs(outputs)
                     if isinstance(model, CapsNet):
                         loss, classification_loss, reconstruction_loss = model.loss(reconstruction_target_images, outputs, labels, reconstructions, CEL_for_classifier=True)
                     elif isinstance(model, CapsNet_Em):
                         loss = model.loss(idx, len(dataloaders[phase]), epoch, num_epochs, outputs, labels)
-
+                        # print('Loss', loss)
+                        classification_loss = loss
+                        reconstruction_loss = torch.tensor(0)
                     # backward + optimize only if in training phase
                     if phase == 'train':
                         loss.backward()
@@ -98,6 +99,8 @@ def train_model(model: Union[CapsNet, CapsNet_Em], scheduler: _LRScheduler, trai
 
                 running_losses += np.array(batch_losses)
                 _, labels_index = torch.max(labels.data, 1)
+                preds = preds.to('cuda:0')
+                labels_index = labels_index.to('cuda:0')
                 batch_num_correct = torch.sum(preds ==labels_index)
                 batch_accuracy = batch_num_correct / float(batch_size)
                 running_corrects += batch_num_correct
