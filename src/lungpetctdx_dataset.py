@@ -7,6 +7,7 @@ import pandas as pd
 import os
 import pickle
 from torchvision import transforms
+from load_dicom_vol import load_volume
 from loading.get_data_from_XML import *
 from typing import Union
 from loading.getUID import *
@@ -237,6 +238,8 @@ class LungPetCtDxDataset_TumorClass3D(CTDataSet):
         exclude_classes: Union[list[str], None] = None,
         max_size: int = -1,
         exclude_empty_bbox_samples=False,
+        samples_per_scan=None,
+        slices_per_sample=None,
     ):
         super().__init__(
             LungPetCtDxDataset_TumorClass3D.all_tumor_class_names,
@@ -247,6 +250,9 @@ class LungPetCtDxDataset_TumorClass3D(CTDataSet):
             max_size,
             exclude_empty_bbox_samples,
         )
+
+        self.samples_per_scan = samples_per_scan
+        self.slices_per_sample = slices_per_sample
     
 
     def _get_paths_labels_subjects_mask(self):
@@ -256,6 +262,24 @@ class LungPetCtDxDataset_TumorClass3D(CTDataSet):
                 paths_label_subject_mask += r
         return paths_label_subject_mask
 
+    def __len__(self):
+        return super().__len__() * self.samples_per_scan
 
     def __getitem__(self, idx):
-        pass
+        item_idx, sample_idx = divmod(idx, len(self.paths_label_subject_mask))
+
+        path, label, subject, mask = self.paths_label_subject_mask[item_idx]
+        x_min, y_min, z_min, x_max, y_max, z_max = mask
+        offset_per_slice = (self.slices_per_sample - (z_max - z_min)) / self.samples_per_scan
+
+        z_start = max(0, z_max - self.slices_per_sample + offset_per_slice*sample_idx)
+        # TOOD: Chheck if z_end valid
+        z_end = z_start + self.slices_per_sample
+
+        volume = load_volume(path)
+        if z_end > volume.shape[-1]:
+            raise Exception('z_end out of bounds of volume.')
+        
+        volume = torch.tensor(volume[...,z_start:z_end])
+        label_one_hot = torch.tensor(self.to_one_hot(label), dtype=torch.float32)
+        return volume, label_one_hot
