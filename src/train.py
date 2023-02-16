@@ -71,6 +71,7 @@ def train_model(
                 reconstruction_target_images = inputs
                 labels = labels.to(device)
 
+
                 # zero the parameter gradients
                 optimizer.zero_grad()
 
@@ -79,6 +80,9 @@ def train_model(
                 with torch.set_grad_enabled(phase == "train"):
                     outputs, reconstructions, _ = model(inputs)
                     preds = predicted_indices_from_outputs(outputs)
+                    print("Test")
+                    print(outputs)
+                    print(labels)
                     loss, classification_loss, reconstruction_loss = model.loss(
                         reconstruction_target_images,
                         outputs,

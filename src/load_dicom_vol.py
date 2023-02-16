@@ -34,7 +34,8 @@ def load_volume(dir_path: str):
 
 
     spacing = np.concatenate((ps, [ss]))
+    vol = img3d
 
-    npVol = img3d
-    print("Max value",np.max(img3d), "min value", np.min(img3d), "mean", np.mean(img3d),"std", np.std(img3d))
+    npVol = vol
+    # print("Max value",np.max(img3d), "min value", np.min(img3d), "mean", np.mean(img3d),"std", np.std(img3d))
     return npVol
