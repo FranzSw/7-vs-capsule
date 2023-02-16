@@ -1,7 +1,6 @@
 import pydicom
 import numpy as np
 import os
-from vedo import Volume
 
 def load_volume(dir_path: str):
     # load the DICOM files
@@ -35,8 +34,8 @@ def load_volume(dir_path: str):
 
 
     spacing = np.concatenate((ps, [ss]))
-    vol = Volume(img3d, spacing = spacing)
+    vol = img3d
 
-    npVol = vol.tonumpy()
-    print("Max value",np.max(img3d), "min value", np.min(img3d), "mean", np.mean(img3d),"std", np.std(img3d))
+    npVol = vol
+    # print("Max value",np.max(img3d), "min value", np.min(img3d), "mean", np.mean(img3d),"std", np.std(img3d))
     return npVol

@@ -47,16 +47,19 @@ def load_3d_files_for_subject(subject_id: str) -> list[tuple[str, str, str, list
     min = -sys.maxsize+1
     max = sys.maxsize
     xmin, ymin, zmin, xmax, ymax, zmax = float(max), float(max), max, float(min), float(min), min 
+    dicom_dir = None
     for k, v in annotations.items():
         dcm_path, _ = available_dicom_files.get(k[:-4], (None, None))
         if dcm_path is None:
             continue
+        dicom_dir = str(Path(dcm_path).parent)
         
 
         current_label = LungPetCtDxDataset_TumorClass3D.all_tumor_class_names[np.argmax(v[0][-LungPetCtDxDataset_TumorClass3D.num_classes:])]
         if current_label != None:
             if label != None and current_label != label:
-                raise Exception(f"Found different labels in same scan: {label} and {current_label}")
+                print(f"Found different labels in same scan ({k}): {label} and {current_label}")
+                return []
             label = current_label
 
         z = int(Path(dcm_path).stem.split("-")[1])
@@ -75,12 +78,12 @@ def load_3d_files_for_subject(subject_id: str) -> list[tuple[str, str, str, list
         if z > zmax:
             zmax = z     
 
-    if label == None:
+    if label is None or dicom_dir is None:
         print(f"Scan for subject {subject_id} has no label. Skipping")
         return []
         #raise Exception(f"Scan for subject {subject_id} has no label.")   
     bbox = [xmin, ymin, zmin, xmax, ymax, zmax]
-    return  [(folder, label, subject_id, bbox)]
+    return  [(dicom_dir, label, subject_id, bbox)]
 
 def load_files_for_subject(subject_id: str) -> list[tuple[str, str, str, list[int]]]:
     print(f"Loading subject {subject_id}")
@@ -240,6 +243,7 @@ class LungPetCtDxDataset_TumorClass3D(CTDataSet):
         exclude_empty_bbox_samples=False,
         samples_per_scan=None,
         slices_per_sample=None,
+        postprocess=None,
     ):
         super().__init__(
             LungPetCtDxDataset_TumorClass3D.all_tumor_class_names,
@@ -253,6 +257,7 @@ class LungPetCtDxDataset_TumorClass3D(CTDataSet):
 
         self.samples_per_scan = samples_per_scan
         self.slices_per_sample = slices_per_sample
+        self.postprocess = postprocess
     
 
     def _get_paths_labels_subjects_mask(self):
@@ -263,23 +268,64 @@ class LungPetCtDxDataset_TumorClass3D(CTDataSet):
         return paths_label_subject_mask
 
     def __len__(self):
+        print('BLUB')
         return super().__len__() * self.samples_per_scan
+    
+    def subject_split(self, test_size: float):
+        subj_train, subj_test = train_test_split(
+            self.all_subjects
+            if self.filtered_subjects is None
+            else self.filtered_subjects,
+            test_size=test_size,
+            random_state=42,
+        )
+        idx_train = []
+        idx_test = []
+        for idx, t in enumerate(self.paths_label_subject_mask):
+            idx_list = [idx + x*len(self.paths_label_subject_mask) for x in range(self.samples_per_scan)]
+            if t[2] in subj_test:
+                idx_test += idx_list
+            else:
+                idx_train += idx_list
+        train_dataset_split = Subset(self, idx_train)
+        test_dataset_split = Subset(self, idx_test)
+
+        return train_dataset_split, test_dataset_split
 
     def __getitem__(self, idx):
         item_idx, sample_idx = divmod(idx, len(self.paths_label_subject_mask))
 
         path, label, subject, mask = self.paths_label_subject_mask[item_idx]
         x_min, y_min, z_min, x_max, y_max, z_max = mask
-        offset_per_slice = (self.slices_per_sample - (z_max - z_min)) / self.samples_per_scan
+        offset_per_slice = (self.slices_per_sample - (z_max - z_min)) / max(1, self.samples_per_scan-1)
 
         z_start = max(0, z_max - self.slices_per_sample + offset_per_slice*sample_idx)
-        # TOOD: Chheck if z_end valid
         z_end = z_start + self.slices_per_sample
 
         volume = load_volume(path)
         if z_end > volume.shape[-1]:
-            raise Exception('z_end out of bounds of volume.')
-        
-        volume = torch.tensor(volume[...,z_start:z_end])
+            b_offset = z_end - volume.shape[-1]
+            z_start -= b_offset
+            z_end -= b_offset
+            if z_start < 0:
+                raise Exception('Volume smaller than samples_per_scan!')
+        z_start = int(z_start)
+        z_end = int(z_end)
+        volume = volume[...,z_start:z_end]
+
+
+        if len(volume.shape) == 3:
+            volume = np.expand_dims(np.array(volume, dtype=np.float32), 0)
+            volume = np.repeat(volume, self.color_channels, 0)
+        elif len(volume.shape) == 4:
+            pass
+            # img = img.transpose((2, 0, 1))
+        else:
+            raise Exception(f"Unknown shape of dicom: {volume.shape}")
+
+        if self.postprocess is not None:
+            volume = torch.tensor(volume, dtype=torch.float32)
+            volume = self.postprocess(volume)
+        volume = torch.tensor(volume, dtype=torch.float32)
         label_one_hot = torch.tensor(self.to_one_hot(label), dtype=torch.float32)
-        return volume, label_one_hot
+        return volume, label_one_hot, mask
