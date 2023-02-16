@@ -38,8 +38,9 @@ def load_3d_files_for_subject(subject_id: str) -> list[tuple[str, str, str, list
     folder = os.path.join(dataset_path, "labels", shortId(subject_id))
     if not os.path.exists(folder):
         return []
+    
     annotations = XML_preprocessor(folder, num_classes=num_classes).data
-  
+    
     
     available_dicom_files = getUID_path(os.path.join(dataset_path, "data", subject_id))
 
@@ -56,7 +57,7 @@ def load_3d_files_for_subject(subject_id: str) -> list[tuple[str, str, str, list
         current_label = LungPetCtDxDataset_TumorClass3D.all_tumor_class_names[np.argmax(v[0][-LungPetCtDxDataset_TumorClass3D.num_classes:])]
         if current_label != None:
             if label != None and current_label != label:
-                raise Exception(f"Found different labels in same scan: {label} and {current_label}")
+                raise Exception(f"Found different labels in same scan ({dcm_path}): {label} and {current_label}")
             label = current_label
 
         z = int(Path(dcm_path).stem.split("-")[1])
@@ -238,8 +239,8 @@ class LungPetCtDxDataset_TumorClass3D(CTDataSet):
         exclude_classes: Union[list[str], None] = None,
         max_size: int = -1,
         exclude_empty_bbox_samples=False,
-        samples_per_scan=None,
-        slices_per_sample=None,
+        samples_per_scan=4,
+        slices_per_sample=30,
     ):
         super().__init__(
             LungPetCtDxDataset_TumorClass3D.all_tumor_class_names,
