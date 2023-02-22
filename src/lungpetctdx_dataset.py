@@ -256,6 +256,8 @@ class LungPetCtDxDataset_TumorClass3D(CTDataSet):
             exclude_empty_bbox_samples,
         )
 
+        self.paths_label_subject_mask = list(filter(lambda tup: 'Wholebody' not in tup[0] and len(os.listdir(tup[0])) > 0, self.paths_label_subject_mask))
+
         self.samples_per_scan = samples_per_scan
         self.slices_per_sample = slices_per_sample
         self.postprocess = postprocess
@@ -269,7 +271,6 @@ class LungPetCtDxDataset_TumorClass3D(CTDataSet):
         return paths_label_subject_mask
 
     def __len__(self):
-        print('BLUB')
         return super().__len__() * self.samples_per_scan
     
     def subject_split(self, test_size: float):
@@ -294,7 +295,8 @@ class LungPetCtDxDataset_TumorClass3D(CTDataSet):
         return train_dataset_split, test_dataset_split
 
     def __getitem__(self, idx):
-        item_idx, sample_idx = divmod(idx, len(self.paths_label_subject_mask))
+        # print('Getting ', idx)
+        sample_idx, item_idx = divmod(idx, len(self.paths_label_subject_mask))
 
         path, label, subject, mask = self.paths_label_subject_mask[item_idx]
         x_min, y_min, z_min, x_max, y_max, z_max = mask
@@ -309,7 +311,7 @@ class LungPetCtDxDataset_TumorClass3D(CTDataSet):
             z_start -= b_offset
             z_end -= b_offset
             if z_start < 0:
-                raise Exception('Volume smaller than samples_per_scan!')
+                raise Exception(f'Volume smaller than samples_per_scan! {volume.shape[-1]}')
         z_start = int(z_start)
         z_end = int(z_end)
         volume = volume[...,z_start:z_end]
