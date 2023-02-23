@@ -18,6 +18,8 @@ def load_volume(dir_path: str):
     # ensure they are in the correct order
     slices = sorted(slices, key=lambda s: s.SliceLocation)
 
+    if(len(slices) < 1):
+        print('No image found for path', dir_path)
     # pixel aspects, assuming all slices are the same
     ps = slices[0].PixelSpacing
     ss = slices[0].SliceThickness
