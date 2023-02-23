@@ -55,6 +55,7 @@ class CTDataSet(Dataset):
         exclude_empty_bbox_samples=False
     ):
         # dirs = [d for d in os.listdir(datasetPath) if os.isdir(d)]
+        self.dataset_path = dataset_path
         self.cache_file = Path(
             f"../cache/{type(self).__name__}_metadata.pickle")
     
