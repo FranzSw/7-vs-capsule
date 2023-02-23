@@ -114,8 +114,8 @@ class Decoder(nn.Module):
         reconstructions = reconstructions.view(-1, self.input_channel, self.input_width, self.input_height)
         return reconstructions, masked
 
-
-class CapsNet(nn.Module):
+from models.model_with_loss import ModelWithLoss
+class CapsNet(ModelWithLoss):
     def __init__(self, config=Config()):
         super(CapsNet, self).__init__()
         if config:
@@ -135,7 +135,7 @@ class CapsNet(nn.Module):
         reconstructions, masked = self.decoder(output, data)
         return output, reconstructions, masked
 
-    def loss(self, data, x, target, reconstructions, CEL_for_classifier = False):
+    def loss(self, data, x, target, reconstructions, CEL_for_classifier = True):
         classification_loss = self.margin_loss(x, target) if not CEL_for_classifier else self.cross_entropy_loss(x,target)
         reconstruction_loss = torch.tensor(0, dtype=torch.float32)
         return classification_loss + reconstruction_loss, classification_loss, reconstruction_loss

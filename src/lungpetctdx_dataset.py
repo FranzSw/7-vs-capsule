@@ -1,12 +1,8 @@
 from concurrent.futures import ProcessPoolExecutor
 import torch
-from torch.utils.data import Dataset, Subset, DataLoader
-from pydicom import dcmread
+from torch.utils.data import Subset
 from sklearn.model_selection import train_test_split
-import pandas as pd
 import os
-import pickle
-from torchvision import transforms
 from load_dicom_vol import load_volume
 from loading.get_data_from_XML import *
 from typing import Union
@@ -242,8 +238,8 @@ class LungPetCtDxDataset_TumorClass3D(CTDataSet):
         exclude_classes: Union[list[str], None] = None,
         max_size: int = -1,
         exclude_empty_bbox_samples=False,
-        samples_per_scan=None,
-        slices_per_sample=None,
+        samples_per_scan: int=4,
+        slices_per_sample: int=32,
         postprocess=None,
     ):
         super().__init__(
@@ -269,7 +265,6 @@ class LungPetCtDxDataset_TumorClass3D(CTDataSet):
         return paths_label_subject_mask
 
     def __len__(self):
-        print('BLUB')
         return super().__len__() * self.samples_per_scan
     
     def subject_split(self, test_size: float):
@@ -323,10 +318,9 @@ class LungPetCtDxDataset_TumorClass3D(CTDataSet):
             # img = img.transpose((2, 0, 1))
         else:
             raise Exception(f"Unknown shape of dicom: {volume.shape}")
-
-        if self.postprocess is not None:
-            volume = torch.tensor(volume, dtype=torch.float32)
-            volume = self.postprocess(volume)
         volume = torch.tensor(volume, dtype=torch.float32)
+        if self.postprocess is not None:
+            volume = self.postprocess(volume)
+        
         label_one_hot = torch.tensor(self.to_one_hot(label), dtype=torch.float32)
         return volume, label_one_hot, mask

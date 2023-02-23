@@ -7,10 +7,11 @@ import copy
 from utils.wandb import wandb_log
 import numpy as np
 import torch
+from torch import nn
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils.data import DataLoader
 from capsule_net import CapsNet
-from typing import Callable, Union
+from typing import Callable, Union, Tuple, Optional, Literal, TypedDict
 
 
 def predicted_indices_from_outputs(outputs):
@@ -19,187 +20,306 @@ def predicted_indices_from_outputs(outputs):
     return torch.squeeze(max_length_indices, -1)
 
 
-def train_model(
-    model: CapsNet,
+class LossEntry:
+    def __init__(
+        self,
+        combined_loss: float,
+        classification_loss: float,
+        reconstruction_loss: float,
+    ):
+        self.losses = np.array(
+            [combined_loss, classification_loss, reconstruction_loss]
+        )
+
+    @classmethod
+    def from_losses(cls, losses: np.ndarray):
+        return cls(losses[0], losses[1], losses[2])
+
+    def get_combined_loss(self):
+        return self.losses[0]
+
+    def get_classification_loss(self):
+        return self.losses[1]
+
+    def get_reconstruction_loss(self):
+        return self.losses[2]
+
+    def __iadd__(self, other):
+        assert isinstance(other, LossEntry), "Can only add another LossEntry instance"
+        self.losses += other.losses
+        return self
+
+    def __add__(self, other):
+        assert isinstance(other, LossEntry), "Can only add another LossEntry instance"
+        return LossEntry.from_losses(self.losses + other.losses)
+
+    def __truediv__(self, other):
+        assert isinstance(other, LossEntry) or isinstance(other, float) or isinstance(other, int), "Can only divide by another LossEntry instance or number"
+        return LossEntry.from_losses(self.losses / (other.losses if isinstance(other, LossEntry) else other)) 
+
+
+class EpochPhaseHistory(TypedDict):
+    losses: list[LossEntry]
+    predicted_indices: np.ndarray
+    label_indices: np.ndarray
+    running_corrects: int
+    running_total: int
+    loss_sum: LossEntry
+
+
+EpochPhase = Literal["train", "val"]
+
+
+class EpochHistory:
+    def __init__(self):
+        self.history: dict[EpochPhase, EpochPhaseHistory] = {
+            "train": self._initial_phase_dict(),
+            "val": self._initial_phase_dict(),
+        }
+
+    def _initial_phase_dict(self) -> EpochPhaseHistory:
+        return {
+            "losses": [],
+            "predicted_indices": np.array([]),
+            "label_indices": np.array([]),
+            "running_corrects": 0,
+            "running_total": 0,
+            "loss_sum": LossEntry(0.0, 0.0, 0.0),
+        }
+
+    def append(
+        self,
+        phase: EpochPhase,
+        loss: LossEntry,
+        batch_predictions: torch.Tensor,
+        batch_labels: torch.Tensor,
+    ):
+        phase_history = self.history[phase]
+        phase_history["losses"].append(loss)
+        phase_history["predicted_indices"] = np.concatenate(
+            (phase_history["predicted_indices"], batch_predictions)
+        )
+        phase_history["label_indices"] = np.concatenate(
+            (phase_history["label_indices"], batch_labels)
+        )
+        batch_num_correct = torch.sum(batch_predictions == batch_labels).item()
+        batch_num_total = len(batch_predictions)
+        phase_history["running_corrects"] += int(batch_num_correct)
+        phase_history["running_total"] += batch_num_total
+        phase_history["loss_sum"] += loss
+
+    def get_predictions_and_labels(self, phase: EpochPhase):
+        """Returns predicted indiced and labels"""
+        return (
+            self.history[phase]["predicted_indices"],
+            self.history[phase]["label_indices"],
+        )
+    def get_count_per_label(self, phase: EpochPhase, num_classes: int):
+        labels = self.history[phase]["label_indices"]
+        counts = [0]*num_classes
+        for label in labels:
+            counts[int(label)] +=1
+        return counts
+
+    def get_num_corrects(self, phase: EpochPhase):
+        return (
+            self.history[phase]["running_corrects"],
+            self.history[phase]["running_total"],
+        )
+
+    def get_accuracy(self, phase: EpochPhase):
+        correct, total = self.get_num_corrects(phase)
+        return correct / total
+
+    def get_loss(self, phase: EpochPhase):
+        return self.history[phase]["loss_sum"] / len(self.history[phase]["losses"])
+
+    def __getitem__(self, phase: EpochPhase):
+        return self.history[phase]
+
+
+class TrainHistory:
+    def __init__(self):
+        self.epoch_histories: list[EpochHistory] = []
+
+    def append(
+        self,
+        epoch: int,
+        phase: EpochPhase,
+        loss: LossEntry,
+        batch_predictions_indices: torch.Tensor,
+        batch_labels_indices: torch.Tensor,
+    ):
+        assert (
+            epoch < len(self.epoch_histories) + 1
+        ), f"Can't log epoch {epoch}. Only {len(self.epoch_histories)} losses tracked so far"
+        l_len = len(batch_labels_indices)
+        p_len = len(batch_predictions_indices)
+        assert (
+            l_len == p_len
+        ), f"Length of labels ({l_len}) different to length of predictions ({p_len}) "
+        if epoch == len(self.epoch_histories):
+            self.epoch_histories.append(EpochHistory())
+        self.epoch_histories[epoch].append(
+            phase, loss, batch_predictions_indices, batch_labels_indices
+        )
+
+    def __getitem__(self, index: int):
+        return self.epoch_histories[index]
+
+    def get_best_accuracy_epoch_index(self, phase: EpochPhase):
+        highest_acc = 0.0
+        best_epoch = -1
+        for i, epoch_history in enumerate(self.epoch_histories):
+            accuracy = epoch_history.get_accuracy(phase)
+            if accuracy > highest_acc:
+                best_epoch = i
+                highest_acc = accuracy
+        return best_epoch
+
+    def get_best_accuracy_epoch(self, phase: EpochPhase):
+        return self[self.get_best_accuracy_epoch_index(phase)]
+
+
+def generic_train_model(
+    model: nn.Module,
     scheduler: _LRScheduler,
-    trainLoader: DataLoader,
-    valLoader: DataLoader,
+    train_loader: DataLoader,
+    val_loader: DataLoader,
+    process_batch: Callable[[int, EpochPhase, int, Tuple], None],
+    on_epoch_done: Optional[Callable[[int, EpochPhase], None]] = None,
     num_epochs=2,
-    on_epoch_done: Union[Callable[[dict[str, float]], None], None] = None,
-    on_batch_done: Union[Callable[[dict[str, float]], None], None] = None,
 ):
     since = time.time()
-    optimizer = scheduler.optimizer
-    best_model_wts = copy.deepcopy(model.state_dict())
-    best_acc = 0.0
-    best_loss = 9999999999.0
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    dataloaders = {"train": trainLoader, "val": valLoader}
-    dataset_sizes = {
-        "train": len(trainLoader)
-        * (trainLoader.batch_size if trainLoader.batch_size else 1),
-        "val": len(valLoader) * (valLoader.batch_size if valLoader.batch_size else 1),
-    }
-    train_losses: list[list[tuple[float, float, float]]] = []
+    dataloaders = {"train": train_loader, "val": val_loader}
+    phases: list[EpochPhase] = ["train", "val"]
 
-    best_acc_y_true = None
-    best_acc_y_pred = None
     for epoch in range(num_epochs):
-        print(f"Epoch {epoch+1}/{num_epochs}")
-        print("-" * 10)
-        epoch_result = {}
-        epoch_train_losses: list[tuple[float, float, float]] = []
-
-        epoch_y_true = np.array([])
-        epoch_y_pred = np.array([])
-        # Each epoch has a training and validation phase
-        for phase in ["train", "val"]:
+        for phase in phases:
             if phase == "train":
-                model.train()  # Set model to training mode
+                model.train()
             else:
-                model.eval()  # Set model to evaluate mode
-            running_corrects = 0
-            running_losses = np.array([0, 0, 0], np.float32)
+                model.eval()
 
-            # Iterate over data.
-            for idx, (inputs, labels, bounding_boxes) in enumerate(dataloaders[phase]):
+            for idx, batch in enumerate(dataloaders[phase]):
+                process_batch(epoch, phase, idx, batch)
 
-                # reconstruction_target_images = torch.tensor(list(map(mask_image, inputs, bounding_boxes)))
-                # reconstruction_target_images = reconstruction_target_images.to(device)
-
-                inputs = inputs.to(device)
-                reconstruction_target_images = inputs
-                labels = labels.to(device)
-
-
-                # zero the parameter gradients
-                optimizer.zero_grad()
-
-                # forward
-                # track history if only in train
-                with torch.set_grad_enabled(phase == "train"):
-                    outputs, reconstructions, _ = model(inputs)
-                    preds = predicted_indices_from_outputs(outputs)
-                    print("Test")
-                    print(outputs)
-                    print(labels)
-                    loss, classification_loss, reconstruction_loss = model.loss(
-                        reconstruction_target_images,
-                        outputs,
-                        labels,
-                        reconstructions,
-                        CEL_for_classifier=True,
-                    )
-
-                    # backward + optimize only if in training phase
-                    if phase == "train":
-                        loss.backward()
-                        optimizer.step()
-
-                # statistics
-                batch_size = inputs.size(0)
-                batch_loss = loss.item() * batch_size
-                batch_classification_loss = classification_loss.item() * batch_size
-                batch_reconstruction_loss = reconstruction_loss.item() * batch_size
-                batch_losses = (
-                    batch_loss,
-                    batch_classification_loss,
-                    batch_reconstruction_loss,
-                )
-                if phase == "train":
-                    epoch_train_losses.append(batch_losses)
-
-                running_losses += np.array(batch_losses)
-                _, labels_index = torch.max(labels.data, 1)
-                batch_num_correct = torch.sum(preds == labels_index)
-                batch_accuracy = batch_num_correct / float(batch_size)
-                running_corrects += batch_num_correct
-                if phase == "val":
-                    epoch_y_true = np.concatenate((epoch_y_true, labels_index.cpu()))
-                    epoch_y_pred = np.concatenate((epoch_y_pred, preds.cpu()))
-
-                if idx % 10 == 0:
-                    batch_size = inputs.size(0)
-                    tqdm.write(
-                        "Epoch: [{}/{}], Batch: [{}/{}], train acc: {:.6f}, batch loss: {:.6f}, running reconstr. loss: {:.6f}, running class. loss: {:.6f}".format(
-                            epoch + 1,
-                            num_epochs,
-                            idx + 1,
-                            len(dataloaders[phase]),
-                            batch_accuracy,
-                            batch_loss,
-                            running_losses[2] / (idx + 1),
-                            running_losses[1] / (idx + 1),
-                        ),
-                        end="\r",
-                    )
-
-                if on_batch_done:
-                    batch_result = {}
-                    batch_result[phase] = {
-                        "batch_accuracy": batch_accuracy,
-                        "batch_loss": batch_loss,
-                        "batch_reconstruction_loss": batch_reconstruction_loss,
-                        "batch_classification_loss": batch_classification_loss,
-                    }
-                    on_batch_done(batch_result)
             if phase == "train":
                 scheduler.step()
-                train_losses.append(epoch_train_losses)
-
-            epoch_loss: float = running_losses[0] / dataset_sizes[phase]
-            epoch_acc = float(running_corrects) / dataset_sizes[phase]
-            epoch_reconstruction_loss = running_losses[2] / dataset_sizes[phase]
-            epoch_classification_loss = running_losses[1] / dataset_sizes[phase]
-
-            epoch_result[phase] = {
-                "epoch_acc": epoch_acc,
-                "epoch_loss": epoch_loss,
-                "epoch_classification_loss": epoch_classification_loss,
-                "epoch_reconstruction_loss": epoch_reconstruction_loss,
-            }
-
-            print(f"{phase} Loss: {epoch_loss:.4f} Acc: {epoch_acc:.4f}")
-
-            # deep copy the model
-            if phase == "val":
-                if epoch_acc > best_acc:
-                    best_acc = epoch_acc
-                    torch.save(model, "temp_best_model.pt")
-                    best_acc_y_true = epoch_y_true
-                    best_acc_y_pred = epoch_y_pred
-                if epoch_loss < best_loss:
-                    best_loss = epoch_loss
-
-        if on_epoch_done:
-            on_epoch_done(epoch_result)
-        print()
+            if on_epoch_done:
+                on_epoch_done(epoch, phase)
 
     time_elapsed = time.time() - since
     print(f"Training complete in {time_elapsed // 60:.0f}m {time_elapsed % 60:.0f}s")
-    print(f"Best val Acc: {best_acc:4f}")
-
-    # load best model weights
-    model = torch.load("temp_best_model.pt")
-    return model, best_acc, best_loss, train_losses, best_acc_y_true, best_acc_y_pred
+    return model
 
 
-def plot_train_losses(losses: list[list[tuple[float, float, float]]]):
-    figure, axis = plt.subplots(3)
+from models.model_with_loss import ModelWithLoss
 
-    def plotLoss(lossIndex: int, title: str, epoch: int):
-        (line,) = axis[lossIndex].plot(
-            range(len(losses)), [entry[lossIndex] for entry in losses[epoch]]
+
+def train_model(
+    model: ModelWithLoss,
+    scheduler: _LRScheduler,
+    train_loader: DataLoader,
+    val_loader: DataLoader,
+    num_epochs=2,
+):
+    optimizer = scheduler.optimizer
+    best_model_wts = copy.deepcopy(model.state_dict())
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    dataloaders = {"train": train_loader, "val": val_loader}
+    history = TrainHistory()
+
+    def process_batch(epoch: int, phase: EpochPhase, idx: int, batch: Tuple):
+        inputs, labels, bbox = batch
+        inputs = inputs.to(device)
+        reconstruction_target_images = inputs
+        labels = labels.to(device)
+        # zero the parameter gradients
+        optimizer.zero_grad()
+        # forward
+        # track history if only in train
+        with torch.set_grad_enabled(phase == "train"):
+            outputs, reconstructions, _ = model(inputs)
+            preds = predicted_indices_from_outputs(outputs)
+
+            loss, classification_loss, reconstruction_loss = model.loss(
+                reconstruction_target_images, outputs, labels, reconstructions
+            )
+            # backward + optimize only if in training phase
+            if phase == "train":
+                loss.backward()
+                optimizer.step()
+
+        # statistics
+        batch_losses = LossEntry(
+            loss.item(), classification_loss.item(), reconstruction_loss.item()
         )
-        line.set_label(f"Epoch {epoch}")
-        axis[lossIndex].set_title(title)
+        _, label_indices = torch.max(labels.data, 1)
+        
+        history.append(
+            epoch, phase, batch_losses, preds.cpu(), label_indices.cpu()
+        )
 
-    for epoch in range(len(losses)):
-        for i, title in enumerate(
-            [
-                "Combined Training losses",
-                "Classification losses",
-                "Reconstruction losses",
+        if idx % 10 == 0:
+            epoch_history = history[epoch]
+            accuracy = epoch_history.get_accuracy(phase)
+            running_epoch_loss = epoch_history.get_loss(phase)
+            tqdm.write(
+                "Epoch: [{}/{}], Batch: [{}/{}], batch loss: {:.4f}| RUNNING  acc: {:.4f}, combined l.: {:.4f}, reconstr. l.: {:.4f}, class. l.: {:.4f}".format(
+                    epoch + 1,
+                    num_epochs,
+                    idx + 1,
+                    len(dataloaders[phase]),
+                    loss.item(),
+                    accuracy,
+                    running_epoch_loss.get_combined_loss(),
+                    running_epoch_loss.get_classification_loss(),
+                    running_epoch_loss.get_reconstruction_loss(),
+                ),
+                end="\r",
+            )
+
+    def on_epoch_done(epoch: int, phase: EpochPhase):
+        if phase == "val":
+            best_epoch_index = history.get_best_accuracy_epoch_index(phase)
+            if best_epoch_index == epoch:
+                nonlocal best_model_wts
+                best_model_wts = copy.deepcopy(model.state_dict())
+        print()
+
+    generic_train_model(
+        model,
+        scheduler,
+        train_loader,
+        val_loader,
+        process_batch,
+        on_epoch_done,
+        num_epochs=num_epochs,
+    )
+    model.load_state_dict(best_model_wts)
+    return model, history
+
+
+def plot_losses(history: TrainHistory):
+    fig, axis = plt.subplots(3, 1, figsize=(12, 8))
+
+    
+
+    def plotLoss(
+        lossIndex: int, extract_loss: Callable[[LossEntry], float], label: str
+    ):
+        phases: list[EpochPhase] = ["train", "val"]
+        for phase in phases:
+            losses = [
+                extract_loss(epoch_history.get_loss(phase))
+                for epoch_history in history.epoch_histories
             ]
-        ):
-            plotLoss(i, title, epoch)
+            (line,) = axis[lossIndex].plot(range(len(losses)), losses)
+            line.set_label(phase)
+        axis[lossIndex].set_title(label)
+    axis[0].legend( ncol=1)
+    plotLoss(0, lambda entry: entry.get_combined_loss(), "Combined Training losses")
+    plotLoss(1, lambda entry: entry.get_classification_loss(), "Classification losses")
+    plotLoss(2, lambda entry: entry.get_reconstruction_loss(), "Reconstruction losses")

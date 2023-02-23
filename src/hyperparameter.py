@@ -1,19 +1,10 @@
 import torch
-import torch.nn as nn
 import torch.optim as optim
 from torch.optim import lr_scheduler
 import torch.backends.cudnn as cudnn
-from torch.utils.data import random_split
-import numpy as np
-import torchvision
-from torchvision import datasets, models, transforms
-import matplotlib.pyplot as plt
-import time
-import os
-import copy
+from torchvision import transforms
 from lungpetctdx_dataset import LungPetCtDxDataset_TumorPresence
-from utils.wandb import start_wandb_run, wandb_watch, wandb_log
-from eval.reconstruction_viusalization import compare_images
+from utils.wandb import wandb_watch, wandb_log
 from utils.wandb import wandb_log, wandb
 import argparse
 
@@ -49,7 +40,7 @@ dataset_sizes = {"train": len(trainSet),"val": len(valSet)}
 
 from capsule_net import CapsNet
 from capsnet_config import Config
-from train import train_model, plot_train_losses, predicted_indices_from_outputs
+from train import train_model
 
 
 def run_train_experiment(config: dict = None):
