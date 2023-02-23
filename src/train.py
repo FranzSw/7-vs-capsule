@@ -114,10 +114,11 @@ class EpochHistory:
             self.history[phase]["predicted_indices"],
             self.history[phase]["label_indices"],
         )
-    def get_count_per_label(self, phase: EpochPhase, num_classes: int):
+    def get_count_per_class(self, phase: EpochPhase, num_classes: int):
         labels = self.history[phase]["label_indices"]
         counts = [0]*num_classes
         for label in labels:
+            assert int(label) < len(counts), f"Label {int(label)} is not valid for num_classes {num_classes}"
             counts[int(label)] +=1
         return counts
 
@@ -267,7 +268,7 @@ def train_model(
             accuracy = epoch_history.get_accuracy(phase)
             running_epoch_loss = epoch_history.get_loss(phase)
             tqdm.write(
-                "Epoch: [{}/{}], Batch: [{}/{}], batch loss: {:.4f}| RUNNING  acc: {:.4f}, combined l.: {:.4f}, reconstr. l.: {:.4f}, class. l.: {:.4f}".format(
+                "Epoch: [{}/{}], Batch: [{}/{}], batch loss: {:.4f}| RUNNING  acc: {:.4f}, combined l.: {:.4f}, class. l.: {:.4f}, reconstr. l.: {:.4f}".format(
                     epoch + 1,
                     num_epochs,
                     idx + 1,
@@ -287,7 +288,7 @@ def train_model(
             if best_epoch_index == epoch:
                 nonlocal best_model_wts
                 best_model_wts = copy.deepcopy(model.state_dict())
-        print()
+        print(f"\nPhase {phase} finished")
 
     generic_train_model(
         model,
@@ -303,12 +304,15 @@ def train_model(
 
 
 def plot_losses(history: TrainHistory):
-    fig, axis = plt.subplots(3, 1, figsize=(12, 8))
+    fig, axis = plt.subplots(4, 1, figsize=(12, 8))
 
+    def plot_any(plot_index: int, values: list[float], line_label: str):
+        (line,) = axis[plot_index].plot(range(len(values)), values)
+        line.set_label(line_label)
+        axis[plot_index].set_xticklabels([str(i) for i in range(len(values))])
     
-
     def plotLoss(
-        lossIndex: int, extract_loss: Callable[[LossEntry], float], label: str
+        plot_index: int, extract_loss: Callable[[LossEntry], float], label: str
     ):
         phases: list[EpochPhase] = ["train", "val"]
         for phase in phases:
@@ -316,10 +320,17 @@ def plot_losses(history: TrainHistory):
                 extract_loss(epoch_history.get_loss(phase))
                 for epoch_history in history.epoch_histories
             ]
-            (line,) = axis[lossIndex].plot(range(len(losses)), losses)
-            line.set_label(phase)
-        axis[lossIndex].set_title(label)
-    axis[0].legend( ncol=1)
+            plot_any(plot_index, losses, phase)
+            axis[plot_index].set_xticklabels([str(i) for i in range(len(losses))])
+        axis[plot_index].set_title(label)
+        
+    
     plotLoss(0, lambda entry: entry.get_combined_loss(), "Combined Training losses")
     plotLoss(1, lambda entry: entry.get_classification_loss(), "Classification losses")
     plotLoss(2, lambda entry: entry.get_reconstruction_loss(), "Reconstruction losses")
+    plot_any(3, [epoch_history.get_accuracy("train") for epoch_history in history.epoch_histories], "train")
+    plot_any(3, [epoch_history.get_accuracy("val") for epoch_history in history.epoch_histories], "val")
+    axis[3].set_title("Accuracy")
+    axis[0].legend( ncol=1)
+    fig.tight_layout()
+    fig.show()
