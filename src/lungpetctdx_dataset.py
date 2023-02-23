@@ -241,7 +241,10 @@ class LungPetCtDxDataset_TumorClass3D(CTDataSet):
         samples_per_scan: int=4,
         slices_per_sample: int=32,
         postprocess=None,
+        sampling=None,
     ):
+
+        path_filter = lambda tup: 'Wholebody' not in tup[0] and (len(os.listdir(tup[0])) - slices_per_sample) > 0
         super().__init__(
             LungPetCtDxDataset_TumorClass3D.all_tumor_class_names,
             dataset_path,
@@ -250,9 +253,9 @@ class LungPetCtDxDataset_TumorClass3D(CTDataSet):
             exclude_classes,
             max_size,
             exclude_empty_bbox_samples,
+            sampling,
+            item_filter=path_filter
         )
-
-        self.paths_label_subject_mask = list(filter(lambda tup: 'Wholebody' not in tup[0] and (len(os.listdir(tup[0])) - slices_per_sample) > 0, self.paths_label_subject_mask))
 
         self.samples_per_scan = samples_per_scan
         self.slices_per_sample = slices_per_sample

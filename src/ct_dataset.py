@@ -52,9 +52,10 @@ class CTDataSet(Dataset):
         subject_count=None,
         exclude_classes: Union[list[str], None] = None,
         max_size: int = -1,
-        exclude_empty_bbox_samples=False
+        exclude_empty_bbox_samples=False,
+        sampling=None,
+        item_filter=None,
     ):
-        # dirs = [d for d in os.listdir(datasetPath) if os.isdir(d)]
         self.dataset_path = dataset_path
         self.cache_file = Path(
             f"../cache/{type(self).__name__}_metadata.pickle")
@@ -81,6 +82,17 @@ class CTDataSet(Dataset):
 
         if max_size != -1:
             self.paths_label_subject_mask = self.paths_label_subject_mask[:max_size]
+
+        if item_filter is not None:
+            self.paths_label_subject_mask = list(filter(item_filter, self.paths_label_subject_mask))
+
+        label_map = list(map(lambda t: t[1], self.paths_label_subject_mask))
+        if sampling == 'undersample':
+            from imblearn.under_sampling import RandomUnderSampler
+            new_path_label_sub, _ = RandomUnderSampler().fit_resample(self.paths_label_subject_mask, label_map)
+            print(f'Undersampled from {len(self.paths_label_subject_mask)} items to {len(new_path_label_sub)}')
+            self.paths_label_subject_mask = new_path_label_sub
+
 
     def isExcluded(self, label: str):
         return label in self.exclude_classes if self.exclude_classes != None else False
