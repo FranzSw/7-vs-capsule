@@ -8,7 +8,7 @@ import os
 import pickle
 from torchvision import transforms
 from loading.get_data_from_XML import *
-from typing import Union
+from typing import Union, Literal, Optional
 from loading.getUID import *
 from abc import abstractmethod
 from pathlib import Path
@@ -53,7 +53,7 @@ class CTDataSet(Dataset):
         exclude_classes: Union[list[str], None] = None,
         max_size: int = -1,
         exclude_empty_bbox_samples=False,
-        sampling=None,
+        sampling: Optional[Literal['undersample']] = None,
         item_filter=None,
     ):
         self.dataset_path = dataset_path

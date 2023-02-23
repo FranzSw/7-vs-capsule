@@ -5,12 +5,12 @@ from sklearn.model_selection import train_test_split
 import os
 from load_dicom_vol import load_volume
 from loading.get_data_from_XML import *
-from typing import Union
+from typing import Union, cast, Optional, Literal
 from loading.getUID import *
 from ct_dataset import CTDataSet2D, CTDataSet
 from pathlib import Path
 from ct_dataset import NormalizationMethods
-from typing import cast
+
 dataset_path = "/dhc/dsets/Lung-PET-CT-Dx"
 num_classes = 4
 
@@ -241,7 +241,7 @@ class LungPetCtDxDataset_TumorClass3D(CTDataSet):
         samples_per_scan: int=4,
         slices_per_sample: int=32,
         postprocess=None,
-        sampling=None,
+        sampling: Optional[Literal['undersample']] = None,
     ):
 
         path_filter = lambda tup: 'Wholebody' not in tup[0] and (len(os.listdir(tup[0])) - slices_per_sample) > 0

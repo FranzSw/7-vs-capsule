@@ -263,24 +263,24 @@ def train_model(
             epoch, phase, batch_losses, preds.cpu(), label_indices.cpu()
         )
 
-        if idx % 10 == 0:
-            epoch_history = history[epoch]
-            accuracy = epoch_history.get_accuracy(phase)
-            running_epoch_loss = epoch_history.get_loss(phase)
-            tqdm.write(
-                "Epoch: [{}/{}], Batch: [{}/{}], batch loss: {:.4f}| RUNNING  acc: {:.4f}, combined l.: {:.4f}, class. l.: {:.4f}, reconstr. l.: {:.4f}".format(
-                    epoch + 1,
-                    num_epochs,
-                    idx + 1,
-                    len(dataloaders[phase]),
-                    loss.item(),
-                    accuracy,
-                    running_epoch_loss.get_combined_loss(),
-                    running_epoch_loss.get_classification_loss(),
-                    running_epoch_loss.get_reconstruction_loss(),
-                ),
-                end="\r",
-            )
+        
+        epoch_history = history[epoch]
+        accuracy = epoch_history.get_accuracy(phase)
+        running_epoch_loss = epoch_history.get_loss(phase)
+        tqdm.write(
+            "Epoch: [{}/{}], Batch: [{}/{}], batch loss: {:.4f}| RUNNING  acc: {:.4f}, combined l.: {:.4f}, class. l.: {:.4f}, reconstr. l.: {:.4f}".format(
+                epoch + 1,
+                num_epochs,
+                idx + 1,
+                len(dataloaders[phase]),
+                loss.item(),
+                accuracy,
+                running_epoch_loss.get_combined_loss(),
+                running_epoch_loss.get_classification_loss(),
+                running_epoch_loss.get_reconstruction_loss(),
+            ),
+            end="\r",
+        )
 
     def on_epoch_done(epoch: int, phase: EpochPhase):
         if phase == "val":
@@ -307,9 +307,11 @@ def plot_losses(history: TrainHistory):
     fig, axis = plt.subplots(4, 1, figsize=(12, 12))
 
     def plot_any(plot_index: int, values: list[float], line_label: str):
-        (line,) = axis[plot_index].plot(range(len(values)), values)
+        x = range(len(values))
+        (line,) = axis[plot_index].plot(x, values)
         line.set_label(line_label)
-        axis[plot_index].set_xticklabels([str(i) for i in range(len(values))])
+        axis[plot_index].set_xticks(x, [str(i) for i in x])
+        
     
     def plotLoss(
         plot_index: int, extract_loss: Callable[[LossEntry], float], label: str
@@ -321,7 +323,6 @@ def plot_losses(history: TrainHistory):
                 for epoch_history in history.epoch_histories
             ]
             plot_any(plot_index, losses, phase)
-            axis[plot_index].set_xticklabels([str(i) for i in range(len(losses))])
         axis[plot_index].set_title(label)
         
     
