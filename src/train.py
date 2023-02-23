@@ -304,7 +304,7 @@ def train_model(
 
 
 def plot_losses(history: TrainHistory):
-    fig, axis = plt.subplots(4, 1, figsize=(12, 8))
+    fig, axis = plt.subplots(4, 1, figsize=(12, 12))
 
     def plot_any(plot_index: int, values: list[float], line_label: str):
         (line,) = axis[plot_index].plot(range(len(values)), values)
