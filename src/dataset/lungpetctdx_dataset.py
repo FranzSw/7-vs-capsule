@@ -3,13 +3,13 @@ import torch
 from torch.utils.data import Subset
 from sklearn.model_selection import train_test_split
 import os
-from load_dicom_vol import load_volume
+from dataset.load_dicom_vol import load_volume
 from loading.get_data_from_XML import *
 from typing import Union, cast, Optional, Literal
 from loading.getUID import *
-from ct_dataset import CTDataSet2D, CTDataSet
+from dataset.ct_dataset import CTDataSet2D, CTDataSet
 from pathlib import Path
-from ct_dataset import NormalizationMethods
+from dataset.ct_dataset import NormalizationMethods
 
 dataset_path = "/dhc/dsets/Lung-PET-CT-Dx"
 num_classes = 4

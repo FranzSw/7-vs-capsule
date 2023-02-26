@@ -3,9 +3,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from capsnet_config import Config
-USE_CUDA = True if torch.cuda.is_available() else False
+from model_config.capsnet_config import Config
+from models.model_with_loss import ModelWithLoss
 
+USE_CUDA = True if torch.cuda.is_available() else False
 
 class ConvLayer(nn.Module):
     def __init__(self, in_channels=1, out_channels=256, kernel_size=9):
@@ -19,7 +20,6 @@ class ConvLayer(nn.Module):
 
     def forward(self, x):
         return F.relu(self.conv(x))
-
 
 class PrimaryCaps(nn.Module):
     def __init__(self, num_capsules=8, in_channels=256, out_channels=32, kernel_size=9, num_routes=32 * 6 * 6):
@@ -64,6 +64,7 @@ class DigitCaps(nn.Module):
             b_ij = b_ij.cuda()
 
         num_iterations = 3
+        v_j: torch.Tensor
         for iteration in range(num_iterations):
             c_ij = F.softmax(b_ij, dim=1)
             c_ij = torch.cat([c_ij] * batch_size, dim=0).unsqueeze(4)
@@ -115,7 +116,7 @@ class Decoder(nn.Module):
         return reconstructions, masked
 
 
-class CapsNet(nn.Module):
+class CapsNet(ModelWithLoss):
     def __init__(self, config=Config()):
         super(CapsNet, self).__init__()
         if config:

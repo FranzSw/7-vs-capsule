@@ -1,4 +1,10 @@
-program: hyperparameter.py
+program: train.py
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - ${args}
+  - --wandb
 method: bayes
 metric:
   name: best_accuracy

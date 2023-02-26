@@ -8,11 +8,12 @@ import os
 import pickle
 from torchvision import transforms
 from loading.get_data_from_XML import *
-from typing import Union, Literal, Optional
+from typing import Union, Literal, Optional, Any
 from loading.getUID import *
 from abc import abstractmethod
 from pathlib import Path
 from enum import Enum
+from torchvision.transforms.functional import crop
 
 
 def isNotEmptyMask(path_label_subject_mask):
@@ -38,6 +39,7 @@ def normalize_meanstd(t: np.ndarray, axis=None):
     mean, std = calculate_meanstd(t, axis)
     return (t - mean) / std
 
+PathLabelSubjectMaskList = list[tuple[str, str, str, tuple[float, float, float, float]]]
 
 class CTDataSet(Dataset):
     """Lung-PET-CT-Dx dataset."""
@@ -68,12 +70,12 @@ class CTDataSet(Dataset):
         csv_file = pd.read_csv(csv_path)
 
         self.all_subjects = csv_file["Subject ID"].unique()
-        self.filtered_subjects = None
+        self.filtered_subjects: list[str]
         if subject_count:
             print(f"Only using {subject_count} subjects")
-            self.filtered_subjects = self.all_subjects[:subject_count]
+            self.filtered_subjects: list[str] = self.all_subjects[:subject_count].tolist()
 
-        self.paths_label_subject_mask = []
+        self.paths_label_subject_mask: PathLabelSubjectMaskList = []
         self.load_paths_labels_subjects_mask(cache)
 
         if exclude_empty_bbox_samples:
@@ -86,12 +88,15 @@ class CTDataSet(Dataset):
         if item_filter is not None:
             self.paths_label_subject_mask = list(filter(item_filter, self.paths_label_subject_mask))
 
-        label_map = list(map(lambda t: t[1], self.paths_label_subject_mask))
+        
         if sampling == 'undersample':
+            label_map = list(map(lambda t: t[1], self.paths_label_subject_mask))
             from imblearn.under_sampling import RandomUnderSampler
-            new_path_label_sub, _ = RandomUnderSampler().fit_resample(self.paths_label_subject_mask, label_map)
+            result = RandomUnderSampler().fit_resample(self.paths_label_subject_mask, label_map)
+            new_path_label_sub: Any = result[0]
+            new_path_label_sub_typed: PathLabelSubjectMaskList = new_path_label_sub
             print(f'Undersampled from {len(self.paths_label_subject_mask)} items to {len(new_path_label_sub)}')
-            self.paths_label_subject_mask = new_path_label_sub
+            self.paths_label_subject_mask = new_path_label_sub_typed
 
 
     def isExcluded(self, label: str):
@@ -141,7 +146,7 @@ class CTDataSet(Dataset):
                     pickle.dump(
                         self.paths_label_subject_mask, f, pickle.HIGHEST_PROTOCOL
                     )
-        if self.filtered_subjects is not None:
+        if self.filtered_subjects != None:
             self.paths_label_subject_mask = list(
                 filter(
                     lambda item: item[2] in self.filtered_subjects,
@@ -264,14 +269,14 @@ class CTDataSet2D(CTDataSet):
 
             if w == 0 and h == 0:
                 print("width and height of masked image are 0!")
-            img = transforms.functional.crop(
+            img = crop(
                 img, int(y), int(x), int(size), int(size))
 
             mask = np.array([0, 0, 1, 1])
         else:
 
             mask = np.array([mask[0] / sx, mask[1] / sy,
-                             mask[2] / sx, mask[3] / sy]) if mask is not None else np.array([0, 0, 1, 1], dtype=np.float)
+                             mask[2] / sx, mask[3] / sy]) if mask is not None else np.array([0, 0, 1, 1], dtype=np.float32)
 
         img = self.resize_transform(img)
         if self._normalization_transform:

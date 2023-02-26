@@ -2,8 +2,8 @@ import os
 from typing import Union
 import torch
 from sklearn.model_selection import train_test_split
-from ct_dataset import CTDataSet
-from load_dicom_vol import load_volume
+from dataset.ct_dataset import CTDataSet
+from dataset.load_dicom_vol import load_volume
 import numpy as np
 import pandas as pd
 

@@ -1,10 +1,10 @@
 import unittest
-from lungpetctdx_dataset import LungPetCtDxDataset_TumorClass, LungPetCtDxDataset_TumorPresence
-from ct_dataset import NormalizationMethods, normalize_meanstd, calculate_meanstd
+from dataset.lungpetctdx_dataset import LungPetCtDxDataset_TumorClass, LungPetCtDxDataset_TumorPresence
+from dataset.ct_dataset import NormalizationMethods, normalize_meanstd, calculate_meanstd
 import os
 import torch
 import numpy as np
-
+from torch.utils.data import DataLoader
 
 class Test(unittest.TestCase):
     def test_normalization_whole_ds(self):
@@ -13,7 +13,7 @@ class Test(unittest.TestCase):
 
         print("Cleared ds distribution cache. Calculating distribution from scratch...")
         # Force load ds mean and std
-        ds2 = LungPetCtDxDataset_TumorClass(normalize=NormalizeMeth)
+        ds2 = LungPetCtDxDataset_TumorClass(normalize=NormalizationMethods.WHOLE_DATASET)
 
         print("Calculated ds distribution. Calculating distribution of normalized dataset (should be a standard normal distr.)...")
         # Calculate mean and sd of normalized dataset
@@ -29,7 +29,7 @@ class Test(unittest.TestCase):
         ds = LungPetCtDxDataset_TumorPresence(
             normalize=NormalizationMethods.SINGLE_IMAGE)
 
-        loader = torch.utils.data.DataLoader(
+        loader = DataLoader(
             ds, batch_size=32, shuffle=True, num_workers=4)
         for idx, (inputs, _, _) in enumerate(loader):
             print(f"Done with {idx}/{len(loader)} batches.\r")
