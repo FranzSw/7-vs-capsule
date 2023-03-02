@@ -1,9 +1,8 @@
-
-
-
 import torch
 from model_config.ResnetConfig import ResnetConfig
 from models.model_with_loss import ModelWithLoss
+from typing import Optional
+
 
 def create_resnet_model(config):
     resnet = torch.hub.load(config.source, config.model_name)
@@ -12,7 +11,10 @@ def create_resnet_model(config):
         param.requires_grad = True
 
     num_ftrs = resnet.fc.in_features
-    resnet.fc = torch.nn.Linear(num_ftrs, config.num_outputs)
+    resnet.fc = torch.nn.Sequential(
+        torch.nn.Linear(num_ftrs, config.num_outputs), torch.nn.Softmax(-1)
+    )
+
     return resnet
 
 
@@ -27,18 +29,18 @@ class Resnet(ModelWithLoss):
         output = self.model(data)
         return torch.unsqueeze(output, -1), data, data
 
-    def loss(self, data, x, target, reconstructions, CEL_for_classifier=False):
-        classification_loss = self.cross_entropy_loss(x, target)
-
+    def loss(
+        self,
+        input_images: torch.Tensor,
+        predictions: torch.Tensor,
+        labels: torch.Tensor,
+        reconstructions: Optional[torch.Tensor],
+        CEL_for_classifier=False,
+    ):
+        classification_loss = self.ce_loss(predictions.squeeze(-1), labels)
+        
         return (
             classification_loss,
             classification_loss,
             torch.tensor(0),
         )
-
-    def cross_entropy_loss(self, x, labels):
-        # output capsule vector geometrical lengths
-        batch_size = x.size(0)
-        v_c = torch.sqrt((x**2).sum(dim=2, keepdim=True)).view(batch_size, -1)
-
-        return self.ce_loss(torch.nn.Softmax(-1)(v_c), labels)
