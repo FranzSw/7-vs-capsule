@@ -5,7 +5,6 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from model_config.capsnet_config import Config
 from models.model_with_loss import ModelWithLoss
-
 USE_CUDA = True if torch.cuda.is_available() else False
 
 
@@ -96,7 +95,7 @@ class DigitCaps(nn.Module):
             b_ij = b_ij.cuda()
 
         num_iterations = 3
-        v_j: torch.Tensor
+        v_j = None
         for iteration in range(num_iterations):
             c_ij = F.softmax(b_ij, dim=1)
             c_ij = torch.cat([c_ij] * batch_size, dim=0).unsqueeze(4)
@@ -109,7 +108,8 @@ class DigitCaps(nn.Module):
                     u_hat.transpose(3, 4), torch.cat([v_j] * self.num_routes, dim=1)
                 )
                 b_ij = b_ij + a_ij.squeeze(4).mean(dim=0, keepdim=True)
-
+        if v_j == None:
+            raise Exception("v_j is None")
         return v_j.squeeze(1)
 
     def squash(self, input_tensor):
@@ -150,7 +150,8 @@ class Decoder(nn.Module):
         classes = F.softmax(classes, dim=0)
 
         _, max_length_indices = classes.max(dim=1)
-        masked = Variable(torch.sparse.torch.eye(self.dc_num_capsules))
+
+        masked = Variable(torch.sparse.torch.eye(self.dc_num_capsules)) # type: ignore
         if USE_CUDA:
             masked = masked.cuda()
         masked = masked.index_select(
