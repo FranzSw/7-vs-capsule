@@ -14,7 +14,7 @@ from abc import abstractmethod
 from pathlib import Path
 from enum import Enum
 from torchvision.transforms.functional import crop
-
+from dataset.base_dataset import BaseDataset
 
 def isNotEmptyMask(path_label_subject_mask):
     mask = path_label_subject_mask[3]
@@ -43,7 +43,7 @@ def normalize_meanstd(t: np.ndarray, axis=None):
 PathLabelSubjectMaskList = list[tuple[str, str, str, tuple[float, float, float, float]]]
 
 
-class CTDataSet(Dataset):
+class CTDataSet(BaseDataset, Dataset):
     """Lung-PET-CT-Dx dataset."""
 
     color_channels = 3
@@ -71,7 +71,7 @@ class CTDataSet(Dataset):
         csv_file = pd.read_csv(csv_path)
 
         self.all_subjects = csv_file["Subject ID"].unique()
-        self.filtered_subjects: list[str] = None
+        self.filtered_subjects: list[str]  = None # type: ignore
         if subject_count:
             print(f"Only using {subject_count} subjects")
             self.filtered_subjects: list[str] = self.all_subjects[
@@ -111,6 +111,9 @@ class CTDataSet(Dataset):
     def isExcluded(self, label: str):
         return label in self.exclude_classes if self.exclude_classes != None else False
 
+    def split(self, test_size:float):
+        return self.subject_split(test_size)
+    
     def subject_split(self, test_size: float):
         subj_train, subj_test = train_test_split(
             self.all_subjects
@@ -137,6 +140,7 @@ class CTDataSet(Dataset):
         labels = list(map(lambda l: self.to_one_hot(l), labels))
         weights = np.sum(labels, axis=0, dtype="float32")
         weights = weights / weights.sum()
+        # TODO: check this 
         weights = 1.0 / weights
         weights = weights / weights.sum()
         return torch.tensor(weights)
