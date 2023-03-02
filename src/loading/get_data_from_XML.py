@@ -5,15 +5,14 @@ from xml.etree import ElementTree
 
 def get_category(category_file):
     class_list = []
-    with open(category_file, 'r') as f:
+    with open(category_file, "r") as f:
         for line in f.readlines():
-            class_list.append(line.rstrip('\n'))
+            class_list.append(line.rstrip("\n"))
 
     return class_list
 
 
 class XML_preprocessor(object):
-
     def __init__(self, data_path, num_classes, normalize=False):
         self.path_prefix = data_path
         self.num_classes = num_classes
@@ -28,24 +27,24 @@ class XML_preprocessor(object):
             root = tree.getroot()
             bounding_boxes = []
             one_hot_classes = []
-            size_tree = root.find('size')
-            width = float(size_tree.find('width').text)
-            height = float(size_tree.find('height').text)
-            for object_tree in root.findall('object'):
-                for bounding_box in object_tree.iter('bndbox'):
+            size_tree = root.find("size")
+            width = float(size_tree.find("width").text)
+            height = float(size_tree.find("height").text)
+            for object_tree in root.findall("object"):
+                for bounding_box in object_tree.iter("bndbox"):
                     if self.normalization:
-                        xmin = float(bounding_box.find('xmin').text)/width
-                        ymin = float(bounding_box.find('ymin').text)/height
-                        xmax = float(bounding_box.find('xmax').text)/width
-                        ymax = float(bounding_box.find('ymax').text)/height
+                        xmin = float(bounding_box.find("xmin").text) / width
+                        ymin = float(bounding_box.find("ymin").text) / height
+                        xmax = float(bounding_box.find("xmax").text) / width
+                        ymax = float(bounding_box.find("ymax").text) / height
                     else:
-                        xmin = float(bounding_box.find('xmin').text)
-                        ymin = float(bounding_box.find('ymin').text)
-                        xmax = float(bounding_box.find('xmax').text)
-                        ymax = float(bounding_box.find('ymax').text)
-                bounding_box = [xmin,ymin,xmax,ymax]
+                        xmin = float(bounding_box.find("xmin").text)
+                        ymin = float(bounding_box.find("ymin").text)
+                        xmax = float(bounding_box.find("xmax").text)
+                        ymax = float(bounding_box.find("ymax").text)
+                bounding_box = [xmin, ymin, xmax, ymax]
                 bounding_boxes.append(bounding_box)
-                class_name = object_tree.find('name').text
+                class_name = object_tree.find("name").text
                 one_hot_class = self._to_one_hot(class_name)
                 one_hot_classes.append(one_hot_class)
             # image_name = root.find('filename').text
@@ -58,16 +57,16 @@ class XML_preprocessor(object):
     def _to_one_hot(self, name):
         one_hot_vector = [0] * self.num_classes
         name = str(name).upper()
-        if name == 'A':
+        if name == "A":
             one_hot_vector[0] = 1
-        elif name == 'B':
+        elif name == "B":
             one_hot_vector[1] = 1
-        elif name == 'E':
+        elif name == "E":
             one_hot_vector[2] = 1
-        elif name == 'G':
+        elif name == "G":
             one_hot_vector[3] = 1
         else:
-            print('unknown label: %s' %name)
+            print("unknown label: %s" % name)
 
         return one_hot_vector
 

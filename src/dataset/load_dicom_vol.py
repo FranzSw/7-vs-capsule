@@ -2,15 +2,18 @@ import pydicom
 import numpy as np
 import os
 
+
 def load_volume(dir_path: str):
     # load the DICOM files
-    files = [pydicom.dcmread(os.path.join(dir_path, fname)) for fname in os.listdir(dir_path)]
+    files = [
+        pydicom.dcmread(os.path.join(dir_path, fname)) for fname in os.listdir(dir_path)
+    ]
 
     # skip files with no SliceLocation (eg scout views)
     slices = []
     skipcount = 0
     for f in files:
-        if hasattr(f, 'SliceLocation'):
+        if hasattr(f, "SliceLocation"):
             slices.append(f)
         else:
             skipcount = skipcount + 1
@@ -18,8 +21,8 @@ def load_volume(dir_path: str):
     # ensure they are in the correct order
     slices = sorted(slices, key=lambda s: s.SliceLocation)
 
-    if(len(slices) < 1):
-        print('No image found for path', dir_path)
+    if len(slices) < 1:
+        print("No image found for path", dir_path)
     # pixel aspects, assuming all slices are the same
     ps = slices[0].PixelSpacing
     ss = slices[0].SliceThickness
@@ -33,7 +36,6 @@ def load_volume(dir_path: str):
     for i, s in enumerate(slices):
         img2d = s.pixel_array
         img3d[:, :, i] = img2d
-
 
     spacing = np.concatenate((ps, [ss]))
     vol = img3d

@@ -10,6 +10,7 @@ import pandas as pd
 
 class NsclcDataset_TumorClass3D(CTDataSet):
     """Lung-PET-CT-Dx dataset."""
+
     all_tumor_class_names = [
         "Adenocarcinoma",
         "Squamous cell carcinoma",
@@ -38,25 +39,31 @@ class NsclcDataset_TumorClass3D(CTDataSet):
         )
 
         self.postprocess = postprocess
-    
 
     def _get_paths_labels_subjects_mask(self):
-        metadata = pd.read_csv(os.path.join(self.dataset_path, 'metadata.csv'))
-        subjects_data = pd.read_csv(os.path.join(self.dataset_path, 'NSCLCR01Radiogenomic_DATA_LABELS_2018-05-22_1500-shifted.csv'))
+        metadata = pd.read_csv(os.path.join(self.dataset_path, "metadata.csv"))
+        subjects_data = pd.read_csv(
+            os.path.join(
+                self.dataset_path,
+                "NSCLCR01Radiogenomic_DATA_LABELS_2018-05-22_1500-shifted.csv",
+            )
+        )
 
-        fusion_data = metadata[metadata['Series Description'] == 'CT FUSION']
+        fusion_data = metadata[metadata["Series Description"] == "CT FUSION"]
         paths_label_subject_mask = []
         for row in fusion_data.to_dict(orient="records"):
-            subject_id = row['Subject ID']
-            subject_data = subjects_data[subjects_data['Case ID'] == subject_id]
-            label = subject_data['Histology'].iloc[0]
+            subject_id = row["Subject ID"]
+            subject_data = subjects_data[subjects_data["Case ID"] == subject_id]
+            label = subject_data["Histology"].iloc[0]
             if label in self.all_tumor_class_names:
-                path = row['File Location'].replace('./NSCLC Radiogenomics/', '')
-                path = os.path.join(self.dataset_path, 'data', path)
-                paths_label_subject_mask += [(path, label, subject_id, [0,0,0,1,1,1])]
-        
+                path = row["File Location"].replace("./NSCLC Radiogenomics/", "")
+                path = os.path.join(self.dataset_path, "data", path)
+                paths_label_subject_mask += [
+                    (path, label, subject_id, [0, 0, 0, 1, 1, 1])
+                ]
+
         return paths_label_subject_mask
-    
+
     def __getitem__(self, idx):
         path, label, subject, mask = self.paths_label_subject_mask[idx]
 

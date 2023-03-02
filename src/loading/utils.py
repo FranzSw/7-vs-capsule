@@ -1,4 +1,5 @@
 import os
+
 # import cv2
 import numpy as np
 import pydicom as dicomio
@@ -27,7 +28,7 @@ def loadFile(filename):
 def loadFileInformation(filename):
     information = {}
     ds = dicomio.read_file(filename, force=True)
-    information['dicom_num'] = ds.SOPInstanceUID
+    information["dicom_num"] = ds.SOPInstanceUID
     # information['PatientID'] = ds.PatientID
     # information['PatientName'] = ds.PatientName
     # information['PatientBirthDate'] = ds.PatientBirthDate
@@ -80,30 +81,30 @@ def dfs_showdir(path, depth):
         print("root:[" + path + "]")
 
     for item in os.listdir(path):
-        if '.git' not in item:
+        if ".git" not in item:
             print("|      " * depth + "+--" + item)
 
-            newitem = path +'/'+ item
+            newitem = path + "/" + item
             if os.path.isdir(newitem):
-                dfs_showdir(newitem, depth +1)
+                dfs_showdir(newitem, depth + 1)
     # print(path_list)
 
 
 def isdir(x):
-    return os.path.isdir(x) and x != '.svn'
+    return os.path.isdir(x) and x != ".svn"
 
 
-def mkfloders(src,tar):
+def mkfloders(src, tar):
     paths = os.listdir(src)
-    paths = map(lambda name:os.path.join(src, name), paths)
+    paths = map(lambda name: os.path.join(src, name), paths)
     paths = list(filter(isdir, paths))
-    if(len(paths)<=0):
+    if len(paths) <= 0:
         return
     for i in paths:
-        (filepath, filename)=os.path.split(i)
-        targetpath = os.path.join(tar,filename)
+        (filepath, filename) = os.path.split(i)
+        targetpath = os.path.join(tar, filename)
         not os.path.isdir(targetpath) and os.mkdir(targetpath)
-        mkfloders(i,targetpath)
+        mkfloders(i, targetpath)
 
 
 def mkdir(path):
@@ -112,8 +113,8 @@ def mkdir(path):
 
     if not isExists:
         os.makedirs(path)
-        print(path + ' successfully be made!')
+        print(path + " successfully be made!")
         return True
     else:
-        print(path + ' the folder already existed!')
+        print(path + " the folder already existed!")
         return False

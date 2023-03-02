@@ -29,15 +29,16 @@ def getUID_path(path):
                 if not os.path.isfile(dicom_path):
                     continue
                 info = loadFileInformation(dicom_path)
-                dict[info['dicom_num']] = (dicom_path, dicom)
+                dict[info["dicom_num"]] = (dicom_path, dicom)
 
     return dict
 
 
 def getUID_file(path):
     info = loadFileInformation(path)
-    UID = info['dicom_num']
+    UID = info["dicom_num"]
     return UID
+
 
 # dict = getUID_file(path)
 # print(dict)

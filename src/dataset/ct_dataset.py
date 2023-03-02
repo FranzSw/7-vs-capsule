@@ -19,7 +19,7 @@ from torchvision.transforms.functional import crop
 def isNotEmptyMask(path_label_subject_mask):
     mask = path_label_subject_mask[3]
     xmin, ymin, xmax, ymax = mask
-    w, h = int(xmax-xmin), int(ymax-ymin)
+    w, h = int(xmax - xmin), int(ymax - ymin)
     return w != 0 and h != 0
 
 
@@ -30,7 +30,7 @@ class NormalizationMethods(Enum):
 
 def calculate_meanstd(t: np.ndarray, axis=None):
     mean = np.mean(t, axis=axis, keepdims=True)
-    std = np.sqrt(((t - mean)**2).mean(axis=axis, keepdims=True))
+    std = np.sqrt(((t - mean) ** 2).mean(axis=axis, keepdims=True))
     return mean, std
 
 
@@ -39,7 +39,9 @@ def normalize_meanstd(t: np.ndarray, axis=None):
     mean, std = calculate_meanstd(t, axis)
     return (t - mean) / std
 
+
 PathLabelSubjectMaskList = list[tuple[str, str, str, tuple[float, float, float, float]]]
+
 
 class CTDataSet(Dataset):
     """Lung-PET-CT-Dx dataset."""
@@ -55,13 +57,12 @@ class CTDataSet(Dataset):
         exclude_classes: Union[list[str], None] = None,
         max_size: int = -1,
         exclude_empty_bbox_samples=False,
-        sampling: Optional[Literal['undersample']] = None,
+        sampling: Optional[Literal["undersample"]] = None,
         item_filter=None,
     ):
         self.dataset_path = dataset_path
-        self.cache_file = Path(
-            f"../cache/{type(self).__name__}_metadata.pickle")
-    
+        self.cache_file = Path(f"../cache/{type(self).__name__}_metadata.pickle")
+
         self.exclude_classes = exclude_classes
         self.class_names = list(
             filter(lambda item: not self.isExcluded(item), all_classes)
@@ -70,34 +71,42 @@ class CTDataSet(Dataset):
         csv_file = pd.read_csv(csv_path)
 
         self.all_subjects = csv_file["Subject ID"].unique()
-        self.filtered_subjects: list[str]
+        self.filtered_subjects: list[str] = None
         if subject_count:
             print(f"Only using {subject_count} subjects")
-            self.filtered_subjects: list[str] = self.all_subjects[:subject_count].tolist()
+            self.filtered_subjects: list[str] = self.all_subjects[
+                :subject_count
+            ].tolist()
 
         self.paths_label_subject_mask: PathLabelSubjectMaskList = []
         self.load_paths_labels_subjects_mask(cache)
 
         if exclude_empty_bbox_samples:
             self.paths_label_subject_mask = list(
-                filter(isNotEmptyMask, self.paths_label_subject_mask))
+                filter(isNotEmptyMask, self.paths_label_subject_mask)
+            )
 
         if max_size != -1:
             self.paths_label_subject_mask = self.paths_label_subject_mask[:max_size]
 
         if item_filter is not None:
-            self.paths_label_subject_mask = list(filter(item_filter, self.paths_label_subject_mask))
+            self.paths_label_subject_mask = list(
+                filter(item_filter, self.paths_label_subject_mask)
+            )
 
-        
-        if sampling == 'undersample':
+        if sampling == "undersample":
             label_map = list(map(lambda t: t[1], self.paths_label_subject_mask))
             from imblearn.under_sampling import RandomUnderSampler
-            result = RandomUnderSampler().fit_resample(self.paths_label_subject_mask, label_map)
+
+            result = RandomUnderSampler().fit_resample(
+                self.paths_label_subject_mask, label_map
+            )
             new_path_label_sub: Any = result[0]
             new_path_label_sub_typed: PathLabelSubjectMaskList = new_path_label_sub
-            print(f'Undersampled from {len(self.paths_label_subject_mask)} items to {len(new_path_label_sub)}')
+            print(
+                f"Undersampled from {len(self.paths_label_subject_mask)} items to {len(new_path_label_sub)}"
+            )
             self.paths_label_subject_mask = new_path_label_sub_typed
-
 
     def isExcluded(self, label: str):
         return label in self.exclude_classes if self.exclude_classes != None else False
@@ -124,7 +133,7 @@ class CTDataSet(Dataset):
 
     # Returns weights between 0 and 1 inverse to the amount they take up in the dataset
     def get_class_weights_inverse(self):
-        _, labels, _ = list(zip(*self.paths_label_subject_mask))
+        _, labels, *_ = list(zip(*self.paths_label_subject_mask))
         labels = list(map(lambda l: self.to_one_hot(l), labels))
         weights = np.sum(labels, axis=0, dtype="float32")
         weights = weights / weights.sum()
@@ -163,7 +172,9 @@ class CTDataSet(Dataset):
             )
 
     @abstractmethod
-    def _get_paths_labels_subjects_mask(self) -> list[tuple[str, str, str, tuple[float, float, float, float]]]:
+    def _get_paths_labels_subjects_mask(
+        self,
+    ) -> list[tuple[str, str, str, tuple[float, float, float, float]]]:
         pass
 
     def __len__(self):
@@ -175,6 +186,7 @@ class CTDataSet(Dataset):
     @abstractmethod
     def __getitem__(self, idx) -> tuple[torch.Tensor, torch.Tensor, np.ndarray]:
         pass
+
 
 class CTDataSet2D(CTDataSet):
     """Lung-PET-CT-Dx dataset."""
@@ -193,7 +205,8 @@ class CTDataSet2D(CTDataSet):
         max_size: int = -1,
         crop_to_tumor: bool = False,
         image_resolution=128,
-        exclude_empty_bbox_samples=False
+        exclude_empty_bbox_samples=False,
+        sampling=None,
     ):
         super().__init__(
             all_classes,
@@ -203,12 +216,14 @@ class CTDataSet2D(CTDataSet):
             exclude_classes,
             max_size,
             exclude_empty_bbox_samples,
-        )
-      
-        self.data_distribution_cache_file = Path(
-            f"../cache/{type(self).__name__}_dataset_distribution.pickle" if not crop_to_tumor else f"../cache/{type(self).__name__}_cropped_dataset_distribution.pickle"
+            sampling,
         )
 
+        self.data_distribution_cache_file = Path(
+            f"../cache/{type(self).__name__}_dataset_distribution.pickle"
+            if not crop_to_tumor
+            else f"../cache/{type(self).__name__}_cropped_dataset_distribution.pickle"
+        )
 
         self.post_normalize_transform = post_normalize_transform
         self._disable_transform_and_norm = False
@@ -216,10 +231,14 @@ class CTDataSet2D(CTDataSet):
         self._normalization_transform = None
         self.crop_to_tumor = crop_to_tumor
         self.resize_transform = transforms.Compose(
-            [transforms.Resize(image_resolution), transforms.CenterCrop(image_resolution)])
+            [
+                transforms.Resize(image_resolution),
+                transforms.CenterCrop(image_resolution),
+            ]
+        )
 
         self.normalize = normalize
-        
+
         if normalize == NormalizationMethods.WHOLE_DATASET:
             mean, sd = None, None
             if cache and os.path.exists(self.data_distribution_cache_file):
@@ -230,11 +249,12 @@ class CTDataSet2D(CTDataSet):
                 if cache:
                     with open(self.data_distribution_cache_file, "wb") as f:
                         pickle.dump((mean, sd), f, pickle.HIGHEST_PROTOCOL)
-            self._normalization_transform = transforms.Normalize(
-                mean=mean, std=sd)
+            self._normalization_transform = transforms.Normalize(mean=mean, std=sd)
 
     @abstractmethod
-    def _get_paths_labels_subjects_mask(self) -> list[tuple[str, str, str, tuple[float, float, float, float]]]:
+    def _get_paths_labels_subjects_mask(
+        self,
+    ) -> list[tuple[str, str, str, tuple[float, float, float, float]]]:
         pass
 
     def __getitem__(self, idx):
@@ -262,21 +282,23 @@ class CTDataSet2D(CTDataSet):
 
         if self.crop_to_tumor:
             xmin, ymin, xmax, ymax = mask
-            w, h = int(xmax-xmin), int(ymax-ymin)
+            w, h = int(xmax - xmin), int(ymax - ymin)
             size = max(w, h)
-            x = xmin + (xmax - xmin)/2 - size/2
-            y = ymin + (ymax - ymin)/2 - size/2
+            x = xmin + (xmax - xmin) / 2 - size / 2
+            y = ymin + (ymax - ymin) / 2 - size / 2
 
             if w == 0 and h == 0:
                 print("width and height of masked image are 0!")
-            img = crop(
-                img, int(y), int(x), int(size), int(size))
+            img = crop(img, int(y), int(x), int(size), int(size))
 
             mask = np.array([0, 0, 1, 1])
         else:
 
-            mask = np.array([mask[0] / sx, mask[1] / sy,
-                             mask[2] / sx, mask[3] / sy]) if mask is not None else np.array([0, 0, 1, 1], dtype=np.float32)
+            mask = (
+                np.array([mask[0] / sx, mask[1] / sy, mask[2] / sx, mask[3] / sy])
+                if mask is not None
+                else np.array([0, 0, 1, 1], dtype=np.float32)
+            )
 
         img = self.resize_transform(img)
         if self._normalization_transform:
@@ -287,7 +309,7 @@ class CTDataSet2D(CTDataSet):
         ):
             img = self.post_normalize_transform(img)
 
-        img = (img)
+        img = img
 
         label_one_hot = self.to_one_hot(label)
         return (img, label_one_hot, mask)
@@ -297,8 +319,7 @@ class CTDataSet2D(CTDataSet):
         if normalize:
             self._force_normalize_for_dist_calc = True
 
-        loader = DataLoader(self, batch_size=batch_size,
-                            num_workers=8, shuffle=False)
+        loader = DataLoader(self, batch_size=batch_size, num_workers=8, shuffle=False)
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         mean = torch.zeros(self.color_channels).to(device)
         var = torch.zeros(self.color_channels).to(device)

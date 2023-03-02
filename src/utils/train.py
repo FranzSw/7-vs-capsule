@@ -53,8 +53,14 @@ class LossEntry:
         return LossEntry.from_losses(self.losses + other.losses)
 
     def __truediv__(self, other):
-        assert isinstance(other, LossEntry) or isinstance(other, float) or isinstance(other, int), "Can only divide by another LossEntry instance or number"
-        return LossEntry.from_losses(self.losses / (other.losses if isinstance(other, LossEntry) else other)) 
+        assert (
+            isinstance(other, LossEntry)
+            or isinstance(other, float)
+            or isinstance(other, int)
+        ), "Can only divide by another LossEntry instance or number"
+        return LossEntry.from_losses(
+            self.losses / (other.losses if isinstance(other, LossEntry) else other)
+        )
 
 
 class EpochPhaseHistory(TypedDict):
@@ -113,12 +119,15 @@ class EpochHistory:
             self.history[phase]["predicted_indices"],
             self.history[phase]["label_indices"],
         )
+
     def get_count_per_class(self, phase: EpochPhase, num_classes: int):
         labels = self.history[phase]["label_indices"]
-        counts = [0]*num_classes
+        counts = [0] * num_classes
         for label in labels:
-            assert int(label) < len(counts), f"Label {int(label)} is not valid for num_classes {num_classes}"
-            counts[int(label)] +=1
+            assert int(label) < len(
+                counts
+            ), f"Label {int(label)} is not valid for num_classes {num_classes}"
+            counts[int(label)] += 1
         return counts
 
     def get_num_corrects(self, phase: EpochPhase):
@@ -153,6 +162,8 @@ class TrainHistory:
         assert (
             epoch < len(self.epoch_histories) + 1
         ), f"Can't log epoch {epoch}. Only {len(self.epoch_histories)} losses tracked so far"
+        if(len(batch_predictions_indices.shape) < 1):
+            return
         l_len = len(batch_labels_indices)
         p_len = len(batch_predictions_indices)
         assert (
@@ -226,7 +237,7 @@ def train_model(
     train_loader: DataLoader,
     val_loader: DataLoader,
     num_epochs=2,
-    on_epoch_done: Optional[Callable[[int, EpochHistory], None]] = None
+    on_epoch_done: Optional[Callable[[int, EpochHistory], None]] = None,
 ):
     optimizer = scheduler.optimizer
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -244,6 +255,7 @@ def train_model(
         optimizer.zero_grad()
         # forward
         with torch.set_grad_enabled(phase == "train"):
+
             outputs, reconstructions, _ = model(inputs)
             preds = predicted_indices_from_outputs(outputs)
 
@@ -260,12 +272,9 @@ def train_model(
             loss.item(), classification_loss.item(), reconstruction_loss.item()
         )
         _, label_indices = torch.max(labels.data, 1)
-        
-        history.append(
-            epoch, phase, batch_losses, preds.cpu(), label_indices.cpu()
-        )
 
-        
+        history.append(epoch, phase, batch_losses, preds.cpu(), label_indices.cpu())
+
         epoch_history = history[epoch]
         accuracy = epoch_history.get_accuracy(phase)
         running_epoch_loss = epoch_history.get_loss(phase)
@@ -290,7 +299,7 @@ def train_model(
             if best_epoch_index == epoch:
                 nonlocal best_model_wts
                 best_model_wts = copy.deepcopy(model.state_dict())
-            
+
             if on_epoch_done:
                 on_epoch_done(epoch, history[epoch])
 
@@ -319,8 +328,7 @@ def plot_losses(history: TrainHistory, out_path: Optional[str] = None):
         (line,) = axis[plot_index].plot(x, values)
         line.set_label(line_label)
         axis[plot_index].set_xticks(x, [str(i) for i in x])
-        
-    
+
     def plotLoss(
         plot_index: int, extract_loss: Callable[[LossEntry], float], label: str
     ):
@@ -332,18 +340,31 @@ def plot_losses(history: TrainHistory, out_path: Optional[str] = None):
             ]
             plot_any(plot_index, losses, phase)
         axis[plot_index].set_title(label)
-        
-    
+
     plotLoss(0, lambda entry: entry.get_combined_loss(), "Combined Training losses")
     plotLoss(1, lambda entry: entry.get_classification_loss(), "Classification losses")
     plotLoss(2, lambda entry: entry.get_reconstruction_loss(), "Reconstruction losses")
-    plot_any(3, [epoch_history.get_accuracy("train") for epoch_history in history.epoch_histories], "train")
-    plot_any(3, [epoch_history.get_accuracy("val") for epoch_history in history.epoch_histories], "val")
+    plot_any(
+        3,
+        [
+            epoch_history.get_accuracy("train")
+            for epoch_history in history.epoch_histories
+        ],
+        "train",
+    )
+    plot_any(
+        3,
+        [
+            epoch_history.get_accuracy("val")
+            for epoch_history in history.epoch_histories
+        ],
+        "val",
+    )
     axis[3].set_title("Accuracy")
-    axis[0].legend( ncol=1)
+    axis[0].legend(ncol=1)
     fig.tight_layout()
-    
+
     if out_path:
         fig.savefig(out_path)
-    else: 
+    else:
         fig.show()

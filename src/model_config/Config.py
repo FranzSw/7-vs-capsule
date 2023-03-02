@@ -1,5 +1,3 @@
-
-
 from abc import ABC, ABCMeta, abstractmethod
 from dataclasses import dataclass
 
