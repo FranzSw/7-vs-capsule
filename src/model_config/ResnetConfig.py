@@ -1,12 +1,11 @@
 from dataclasses import dataclass
-from model_config.Config import ModelConfig
-from typing import Optional
-
+from typing import Optional, Union
+from torch import Tensor
 
 @dataclass
-class ResnetConfig(ModelConfig):
+class ResnetConfig():
     model_name = "resnet152"
     source = "pytorch/vision:v0.10.0"
-
+   
     num_outputs: int
-    class_weights: Optional[list]
+    class_weights: Optional[Union[list, Tensor]]
