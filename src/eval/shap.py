@@ -59,9 +59,11 @@ class ShapEvaluation:
     def __init__(self, model: nn.Module, input_sample_shape: tuple, class_names):
         self.model = model
         masker = shap.maskers.Image("blur(32, 32)", input_sample_shape)  # type: ignore
+
         self.explainer = shap.Explainer(
             self._predict, masker=masker, output_names=class_names
         )
+        self.class_names = class_names
 
     def _predict(self, img_batch: torch.Tensor):
         img_batch = nhwc_to_nchw(torch.tensor(img_batch))
@@ -84,13 +86,12 @@ class ShapEvaluation:
         output_path: str,
     ):
         input_images = transform(input_batch).cpu().numpy()
-        shap_values = self.explainer(input_images, max_evals=50000, batch_size=input_images.shape[0], outputs=shap.Explanation.argsort.flip[:2])  # type: ignore
-        print("shap_values size", shap_values.data.shape)
+        shap_values = self.explainer(input_images, max_evals=500, batch_size=input_images.shape[0], outputs=shap.Explanation.argsort.flip[:2])  # type: ignore
+
         if bounding_boxes is not None:
             shap_values.data = np.array(
                 list(map(write_bbox_in_matrix, shap_values.data, bounding_boxes))
             )
 
-        shap.image_plot(shap_values)
-        plt.tight_layout()
+        shap.image_plot(shap_values, labels=[self.class_names] * input_images.shape[0])
         plt.savefig(output_path)
