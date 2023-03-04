@@ -19,9 +19,9 @@ Via command line arguments you can specify which model to train on which dataset
 In the following we will describe the main arguments you can use for running the pipeline. 
 In general the command structure is `python train.py [MODEL] [PARAMETER_1] ...` with `[MODEL] = resnet_2d, capsnet_2d or capsnet_3d`.
 - `--dataset=[DATASET_NAME]`: Specifies the dataset. Can be `lungpetctx` or ``mnist`
-- '--slice_width=[INTEGER]' Specifies the CT image width per slice OR image width in MNIST
+- `--slice_width=[INTEGER]` Specifies the CT image width per slice OR image width in MNIST
 - `--early_stopping` If set, training will stop once validation loss has not improved over 2 epochs
-- '--class_imbalance=[STRATEGY]' Specifies how to deal with class imbalances (only available for lungpetctx dataset). Strategy can be "class_weights" (scale loss by inverse class frequency), "undersample" (take less samples of majority class to achieve class balance), "none" (do nothing)
+- `--class_imbalance=[STRATEGY]` Specifies how to deal with class imbalances (only available for lungpetctx dataset). Strategy can be "class_weights" (scale loss by inverse class frequency), "undersample" (take less samples of majority class to achieve class balance), "none" (do nothing)
 Other arguments can be seen via `python train.py -h`
 ## Examples
 ### Train on MNIST
