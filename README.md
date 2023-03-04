@@ -22,7 +22,7 @@ In general the command structure is `python train.py [MODEL] [PARAMETER_1] ...` 
 - `--slice_width=[INTEGER]` Specifies the CT image width per slice OR image width in MNIST
 - `--early_stopping` If set, training will stop once validation loss has not improved over 2 epochs
 - `--class_imbalance=[STRATEGY]` Specifies how to deal with class imbalances (only available for lungpetctx dataset). Strategy can be "class_weights" (scale loss by inverse class frequency), "undersample" (take less samples of majority class to achieve class balance), "none" (do nothing)
-Other arguments can be seen via `python train.py -h`
+Other arguments can be seen via `python train.py [MODEL] -h` (e.g. `python train.py capsnet_2d -h`)
 ## Examples
 ### Train on MNIST
 To make sure our pipeline works one can train `capsnet_2d` or `resnet_2d` on the MNIST dataset.
