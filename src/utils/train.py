@@ -283,7 +283,7 @@ def train_model(
                                     torch.nn.utils.clip_grad_norm_(p, threshold)  # type: ignore
                     optimizer.step()
                 if torch.isnan(loss).any():
-                    print(f"Nan loss: {torch.isnan(loss)}| Loss: {loss}")
+                    print(f"Nan loss: {torch.isnan(loss)}| Loss: {loss}\n")
 
         # statistics
         batch_losses = LossEntry(
