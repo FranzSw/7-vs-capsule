@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from model_config.capsnet_config import Config
 from models.model_with_loss import ModelWithLoss
+
 USE_CUDA = True if torch.cuda.is_available() else False
 
 
@@ -151,7 +152,7 @@ class Decoder(nn.Module):
 
         _, max_length_indices = classes.max(dim=1)
 
-        masked = Variable(torch.sparse.torch.eye(self.dc_num_capsules)) # type: ignore
+        masked = Variable(torch.sparse.torch.eye(self.dc_num_capsules))  # type: ignore
         if USE_CUDA:
             masked = masked.cuda()
         masked = masked.index_select(
@@ -169,32 +170,32 @@ class Decoder(nn.Module):
 class CapsNet(ModelWithLoss):
     def __init__(self, config=Config()):
         super(CapsNet, self).__init__()
-        if config:
-            self.conv_layer = ConvLayer(
-                config.cnn_in_channels, config.cnn_out_channels, config.cnn_kernel_size
-            )
-            self.primary_capsules = PrimaryCaps(
-                config.pc_num_capsules,
-                config.pc_in_channels,
-                config.pc_out_channels,
-                config.pc_kernel_size,
-                config.pc_num_routes,
-            )
-            self.digit_capsules = DigitCaps(
-                config.dc_num_capsules,
-                config.dc_num_routes,
-                config.dc_in_channels,
-                config.dc_out_channels,
-                config.dc_num_iterations,
-            )
-            self.decoder = Decoder(
-                config.input_width,
-                config.input_height,
-                config.cnn_in_channels,
-                config.dc_num_capsules,
-                config.dc_out_channels,
-            )
-            self.reconstruction_loss_factor = config.reconstruction_loss_factor
+        self.input_color_channels = config.cnn_in_channels
+        self.conv_layer = ConvLayer(
+            config.cnn_in_channels, config.cnn_out_channels, config.cnn_kernel_size
+        )
+        self.primary_capsules = PrimaryCaps(
+            config.pc_num_capsules,
+            config.pc_in_channels,
+            config.pc_out_channels,
+            config.pc_kernel_size,
+            config.pc_num_routes,
+        )
+        self.digit_capsules = DigitCaps(
+            config.dc_num_capsules,
+            config.dc_num_routes,
+            config.dc_in_channels,
+            config.dc_out_channels,
+            config.dc_num_iterations,
+        )
+        self.decoder = Decoder(
+            config.input_width,
+            config.input_height,
+            config.cnn_in_channels,
+            config.dc_num_capsules,
+            config.dc_out_channels,
+        )
+        self.reconstruction_loss_factor = config.reconstruction_loss_factor
 
         self.mse_loss = nn.MSELoss()
         self.ce_loss = nn.CrossEntropyLoss(weight=config.class_weights)
