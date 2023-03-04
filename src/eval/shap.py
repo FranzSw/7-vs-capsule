@@ -75,8 +75,6 @@ class ShapEvaluation:
         if is_single:
             output = output[0:1, :]
         output = softmax_output(output)
-        print("outputs size", output.size())
-
         return output.detach().cpu()
 
     def evaluate(
