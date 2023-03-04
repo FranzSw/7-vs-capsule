@@ -6,6 +6,8 @@ from abc import ABC
 
 
 class ModelWithLoss(ABC, nn.Module):
+    input_color_channels: int
+
     @abstractmethod
     def loss(
         self,
