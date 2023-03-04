@@ -162,7 +162,7 @@ class TrainHistory:
         assert (
             epoch < len(self.epoch_histories) + 1
         ), f"Can't log epoch {epoch}. Only {len(self.epoch_histories)} losses tracked so far"
-        if(len(batch_predictions_indices.shape) < 1):
+        if len(batch_predictions_indices.shape) < 1:
             return
         l_len = len(batch_labels_indices)
         p_len = len(batch_predictions_indices)
@@ -201,7 +201,7 @@ def generic_train_model(
     on_epoch_start: Optional[Callable[[int, EpochPhase], None]] = None,
     on_epoch_done: Optional[Callable[[int, EpochPhase], None]] = None,
     num_epochs=2,
-    should_stop: Optional[Callable[[], bool]] = None
+    should_stop: Optional[Callable[[], bool]] = None,
 ):
     since = time.time()
     dataloaders = {"train": train_loader, "val": val_loader}
@@ -226,7 +226,7 @@ def generic_train_model(
 
         if should_stop:
             if should_stop():
-                print("Stopping early")
+                print("\nStopping early")
                 break
 
     time_elapsed = time.time() - since
@@ -245,7 +245,7 @@ def train_model(
     num_epochs=2,
     on_epoch_done: Optional[Callable[[int, EpochHistory], None]] = None,
     max_gradient_clip: float = 10,
-    should_stop: Optional[Callable[[TrainHistory], bool]] = None
+    should_stop: Optional[Callable[[TrainHistory], bool]] = None,
 ):
     optimizer = scheduler.optimizer
     best_model_wts = copy.deepcopy(model.state_dict())
@@ -255,7 +255,7 @@ def train_model(
     history = TrainHistory()
 
     def process_batch(epoch: int, phase: EpochPhase, idx: int, batch: Tuple):
-        inputs, labels,*rest = batch
+        inputs, labels, *rest = batch
         inputs = inputs.to(device)
         reconstruction_target_images = inputs
         labels = labels.to(device)
@@ -280,7 +280,7 @@ def train_model(
                         for p in model.parameters():
                             if p.grad is not None:
                                 if p.grad.norm() > threshold:
-                                    torch.nn.utils.clip_grad_norm_(p, threshold) # type: ignore
+                                    torch.nn.utils.clip_grad_norm_(p, threshold)  # type: ignore
                     optimizer.step()
                 if torch.isnan(loss).any():
                     print(f"Nan loss: {torch.isnan(loss)}| Loss: {loss}")
@@ -289,7 +289,7 @@ def train_model(
         batch_losses = LossEntry(
             loss.item(), classification_loss.item(), reconstruction_loss.item()
         )
-        
+
         _, label_indices = torch.max(labels.data, 1)
 
         history.append(epoch, phase, batch_losses, preds.cpu(), label_indices.cpu())
@@ -334,7 +334,7 @@ def train_model(
         on_epoch_start,
         _on_epoch_done,
         num_epochs=num_epochs,
-        should_stop=lambda: (should_stop(history) if should_stop else False)
+        should_stop=lambda: (should_stop(history) if should_stop else False),
     )
     model.load_state_dict(best_model_wts)
     return model, history
