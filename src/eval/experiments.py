@@ -75,7 +75,8 @@ def store_experiment(
         )
         _, valSet = ds.split(0.2)
         loader = DataLoader(valSet, batch_size=10, shuffle=True, num_workers=4)
-        inputs, classes, bounding_boxes = next(iter(loader))
+        inputs, *rest = next(iter(loader))
+        bounding_boxes = rest[1] if len(rest) > 1 else None
         out_path = os.path.join(out_dir, "shap.png")
         shap_eval.evaluate(inputs, bounding_boxes, out_path)
 
