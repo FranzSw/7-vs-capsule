@@ -32,9 +32,9 @@ Run `python train.py resnet_2d --epochs=10 --slice_width=28 --learning_rate=0.00
 Run `python train.py capsnet_2d --dataset=mnist --slice_width=128 --batch_size=4 --learning_rate=0.001`
 ### Train on Lung-PET-CT-Dx
 #### Resnet 2d
-Run `python train.py resnet_2d --epochs=10 --slice_width=28 --learning_rate=0.001 --dataset=lungpetctx --early_stopping`
+Run `python train.py resnet_2d --epochs=10 --slice_width=128 --learning_rate=0.001 --dataset=lungpetctx --early_stopping`
 #### CapsuleNet 2d
-Run `python train.py capsnet_2d --epochs=10 --slice_width=28 --learning_rate=0.01 --dataset=lungpetctx`
+Run `python train.py capsnet_2d --epochs=10 --slice_width=128 --learning_rate=0.01 --dataset=lungpetctx`
 #### Resnet 3d
 Not supported
 #### CapsuleNet 3d
