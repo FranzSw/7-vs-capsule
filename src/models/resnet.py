@@ -1,5 +1,5 @@
 import torch
-from model_config.ResnetConfig import ResnetConfig
+from model_config.resnet_config import ResnetConfig
 from models.model_with_loss import ModelWithLoss
 from typing import Optional
 
@@ -21,7 +21,7 @@ def create_resnet_model(config):
 class Resnet(ModelWithLoss):
     def __init__(self, config):
         super(Resnet, self).__init__()
-
+        self.input_color_channels = 3
         self.model = create_resnet_model(config)
         self.ce_loss = torch.nn.CrossEntropyLoss(weight=config.class_weights)
 
@@ -38,7 +38,7 @@ class Resnet(ModelWithLoss):
         CEL_for_classifier=False,
     ):
         classification_loss = self.ce_loss(predictions.squeeze(-1), labels)
-        
+
         return (
             classification_loss,
             classification_loss,
