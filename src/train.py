@@ -155,6 +155,15 @@ def get_dataset(config: dict) -> BaseDataset:
                 print(
                     f'Warning: you are using the mnist dataset with a slice_width (here image width) of {config["slice_width"]} which is not the default of 28.'
                 )
+            if config["class_imbalance"] != "none":
+                print(
+                    f'Argument class_imbalance={config["class_imbalance"]} not supported for dataset MNIST. Ignoring it'
+                )
+            if config["max_loaded_samples"] != -1:
+                print(
+                    f"Argument max_loaded_samples not supported for dataset MNIST. Ignoring it"
+                )
+
             return MNISTDataset(
                 image_width=config["slice_width"],
                 color_channels=3 if "resnet" in config["model"] else 1,
@@ -229,44 +238,97 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     common_parser = argparse.ArgumentParser(add_help=False)
-    common_parser.add_argument("--epochs", type=int, default=1)
-    common_parser.add_argument("--max_loaded_samples", type=int, default=-1)
-    common_parser.add_argument("--learning_rate", type=float, default=0.1)
-    common_parser.add_argument("--slice_width", type=int, default=128)
-    common_parser.add_argument("--batch_size", type=int, default=32)
-    common_parser.add_argument("--iterations", type=int, default=5)
-    common_parser.add_argument("--wandb", action="store_true")
-    common_parser.add_argument("--early_stopping", action="store_true", default=False)
+    common_parser.add_argument("--epochs", type=int, default=1, help="Number of epochs")
+    common_parser.add_argument(
+        "--max_loaded_samples",
+        type=int,
+        default=-1,
+        help="Maximum number of samples to load for the given dataset",
+    )
+    common_parser.add_argument(
+        "--learning_rate", type=float, default=0.1, help="Model learning rate"
+    )
+    common_parser.add_argument(
+        "--slice_width",
+        type=int,
+        default=128,
+        help="Width of each CT slide OR just the image width for MNIST",
+    )
+    common_parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
+    common_parser.add_argument(
+        "--wandb",
+        action="store_true",
+        help="If set, training progress and results will be logged to wandb",
+    )
+    common_parser.add_argument(
+        "--early_stopping",
+        action="store_true",
+        default=False,
+        help="If set, stops training once validation loss has not improved for 2 epochs",
+    )
     common_parser.add_argument(
         "--class_imbalance",
         type=str,
         choices=["class_weights", "undersample", "none"],
         default="none",
+        help="Strategy to cope with class imbalance (only available for lungpetctx). \nOptions:\n- class_weights: apply weighted loss\n- undersample: take less samples of majority class to reach class balance\n- none: do nothing",
     )
     common_parser.add_argument(
-        "--dataset", type=str, choices=["lungpetctx", "mnist"], default="lungpetctx"
+        "--dataset",
+        type=str,
+        choices=["lungpetctx", "mnist"],
+        default="lungpetctx",
+        help="Specify dataset",
     )
 
     subparsers = parser.add_subparsers(required=True, dest="model")
 
-    parser_capsnet2d_parser = subparsers.add_parser(
-        "capsnet_2d", parents=[common_parser]
+    capsnet2d_parser = subparsers.add_parser("capsnet_2d", parents=[common_parser])
+    capsnet2d_parser.add_argument(
+        "--iterations",
+        type=int,
+        default=5,
+        help="Number of routing iterations for capsule network",
     )
-    parser_capsnet2d_parser.add_argument("--out_capsule_size", type=int, default=16)
-    parser_capsnet2d_parser.add_argument(
-        "--reconstruction_loss_factor", type=float, default=0.5
+    capsnet2d_parser.add_argument(
+        "--out_capsule_size", type=int, default=16, help="Length per output capsule"
+    )
+    capsnet2d_parser.add_argument(
+        "--reconstruction_loss_factor",
+        type=float,
+        default=0.5,
+        help="Factor to scale the reconstruction loss effect",
     )
 
-    parser_capsnet3d_parser = subparsers.add_parser(
-        "capsnet_3d", parents=[common_parser]
+    capsnet3d_parser = subparsers.add_parser("capsnet_3d", parents=[common_parser])
+    capsnet3d_parser.add_argument(
+        "--iterations",
+        type=int,
+        default=5,
+        help="Number of routing iterations for capsule network",
     )
-    parser_capsnet3d_parser.add_argument("--out_capsule_size", type=int, default=16)
-    parser_capsnet3d_parser.add_argument("--slices_per_sample", type=int, default=30)
-    parser_capsnet3d_parser.add_argument("--samples_per_scan", type=int, default=4)
-    parser_capsnet3d_parser.add_argument(
-        "--reconstruction_loss_factor", type=float, default=0.5
+    capsnet3d_parser.add_argument(
+        "--out_capsule_size", type=int, default=16, help="Length per output capsule"
     )
-    parser_resnet2d_parser = subparsers.add_parser("resnet_2d", parents=[common_parser])
+    capsnet3d_parser.add_argument(
+        "--slices_per_sample",
+        type=int,
+        default=30,
+        help="Number of slices per input sample",
+    )
+    capsnet3d_parser.add_argument(
+        "--samples_per_scan",
+        type=int,
+        default=4,
+        help="Number of samples to be generated per scan. Achieved through shifting around the tumor in the slices dimension",
+    )
+    capsnet3d_parser.add_argument(
+        "--reconstruction_loss_factor",
+        type=float,
+        default=0.5,
+        help="Factor to scale the reconstruction loss effect",
+    )
+    resnet2d_parser = subparsers.add_parser("resnet_2d", parents=[common_parser])
 
     args = parser.parse_args()
     argsDict = vars(args)
