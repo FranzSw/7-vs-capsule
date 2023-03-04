@@ -30,7 +30,7 @@ from dataset.ct_dataset import NormalizationMethods, CTDataSet
 
 # model = torch.load("test")
 from model_config.capsnet_config import Config
-from model_config.ResnetConfig import ResnetConfig
+from model_config.resnet_config import ResnetConfig
 from utils.train import train_model, EpochHistory, plot_losses, TrainHistory
 from wandb.plot import confusion_matrix
 from datetime import datetime
@@ -38,8 +38,9 @@ import os
 import json
 import matplotlib.pyplot as plt
 from dataset.base_dataset import BaseDataset
-from typing import Literal
+from typing import Literal, Any
 from dataset.mnist_dataset import MNISTDataset
+from eval.experiments import store_experiment
 
 
 def get_model(config: dict, ds: BaseDataset):
@@ -59,6 +60,7 @@ def get_model(config: dict, ds: BaseDataset):
                 num_iterations=config["iterations"],
             )
             from models.capsule_net_3d import CapsNet
+
             return CapsNet(capsConfig)
         elif "2d" in config["model"]:
             capsConfig = Config(
@@ -75,6 +77,7 @@ def get_model(config: dict, ds: BaseDataset):
                 input_slices=1,
             )
             from models.capsule_net import CapsNet
+
             return CapsNet(capsConfig)
         else:
             raise Exception(f'Model {config["model"]} not found')
@@ -89,7 +92,7 @@ def get_model(config: dict, ds: BaseDataset):
                 else None,
             )
             return Resnet(resnetConfig)
-        else: 
+        else:
             raise Exception(f'Model {config["model"]} not found')
     else:
         raise Exception(f'Model not found {config["model"]}')
@@ -152,7 +155,10 @@ def get_dataset(config: dict) -> BaseDataset:
                 print(
                     f'Warning: you are using the mnist dataset with a slice_width (here image width) of {config["slice_width"]} which is not the default of 28.'
                 )
-            return MNISTDataset(image_width=config["slice_width"], color_channels=3 if "resnet" in config["model"] else 1)
+            return MNISTDataset(
+                image_width=config["slice_width"],
+                color_channels=3 if "resnet" in config["model"] else 1,
+            )
         else:
             raise Exception(
                 f'Dataset {DATASET} not available for model {config["mode"]}'
@@ -161,7 +167,7 @@ def get_dataset(config: dict) -> BaseDataset:
         raise Exception(f'No matching dataset for model { config["model"]}')
 
 
-def run_train_experiment(config: dict, use_wandb: bool):
+def run_train_experiment(config: dict[str, Any], use_wandb: bool):
     ds = get_dataset(config)
 
     trainSet, valSet = ds.split(0.2)
@@ -194,13 +200,16 @@ def run_train_experiment(config: dict, use_wandb: bool):
         )
 
     def should_stop(history: TrainHistory):
-        if len(history.epoch_histories)<3:
+        if len(history.epoch_histories) < 3:
             return False
-        
-        combinded_loss = lambda epoch: history[epoch].get_loss("val").get_combined_loss()
-        has_improved =combinded_loss(-3) > combinded_loss(-2) or combinded_loss(-3) > combinded_loss(-1)
+
+        combinded_loss = (
+            lambda epoch: history[epoch].get_loss("val").get_combined_loss()
+        )
+        has_improved = combinded_loss(-3) > combinded_loss(-2) or combinded_loss(
+            -3
+        ) > combinded_loss(-1)
         return not has_improved
-        
 
     # Decay LR by a factor of 0.1 every 7 epochs
     exp_lr_scheduler = lr_scheduler.StepLR(optimizer_ft, step_size=7, gamma=0.1)
@@ -211,45 +220,9 @@ def run_train_experiment(config: dict, use_wandb: bool):
         dataloaders["val"],
         num_epochs=config["epochs"],
         on_epoch_done=on_epoch_done,
-        should_stop=should_stop if config["early_stopping"] else lambda _: False
+        should_stop=should_stop if config["early_stopping"] else lambda _: False,
     )
-    best_acc_epoch = history.get_best_accuracy_epoch("val")
-    best_acc_y_pred, best_acc_y_true = best_acc_epoch.get_predictions_and_labels("val")
-    if best_acc_y_pred is not None and best_acc_y_true is not None:
-        if use_wandb:
-            wandb.log(
-                {
-                    "confusion_matrix": confusion_matrix(
-                        preds=best_acc_y_pred.tolist(),
-                        y_true=best_acc_y_true.tolist(),
-                        class_names=ds.class_names,
-                    ),
-                    "best_accuracy": best_acc_epoch.get_accuracy("val"),
-                }
-            )
-        else:
-            pass
-
-    if not use_wandb:
-        now = datetime.now()
-        now_formatted = now.strftime("%m.%d.%Y_%H:%M:%S")
-        out_dir = f"results/{now_formatted}"
-        os.makedirs(out_dir, exist_ok=True)
-        plot_losses(history, out_path=os.path.join(out_dir, "history.png"))
-
-        plt.clf()
-        disp = ConfusionMatrixDisplay(
-            confusion_matrix=conf_matrix_sklearn(
-                best_acc_y_true, best_acc_y_pred, labels=range(len(ds.class_names))
-            ),
-            display_labels=ds.class_names,
-        )
-        disp.plot()
-        plt.savefig(os.path.join(out_dir, "best_val_acc_conf_matrix.png"))
-        with open(os.path.join(out_dir, "parameters.json"), "w") as f:
-            json.dump(config.__dict__, f, indent=4)
-        torch.save(model, os.path.join(out_dir, "model.pt"))
-        print(f"Saved results at {out_dir}")
+    store_experiment(model, history, config, ds, use_wandb)
 
 
 if __name__ == "__main__":
@@ -276,24 +249,24 @@ if __name__ == "__main__":
 
     subparsers = parser.add_subparsers(required=True, dest="model")
 
-    parser_lungpet_2d_parser = subparsers.add_parser(
+    parser_capsnet2d_parser = subparsers.add_parser(
         "capsnet_2d", parents=[common_parser]
     )
-    parser_lungpet_2d_parser.add_argument("--out_capsule_size", type=int, default=16)
-    parser_lungpet_2d_parser.add_argument(
+    parser_capsnet2d_parser.add_argument("--out_capsule_size", type=int, default=16)
+    parser_capsnet2d_parser.add_argument(
         "--reconstruction_loss_factor", type=float, default=0.5
     )
 
-    parser_lungpet_3d_parser = subparsers.add_parser(
+    parser_capsnet3d_parser = subparsers.add_parser(
         "capsnet_3d", parents=[common_parser]
     )
-    parser_lungpet_3d_parser.add_argument("--out_capsule_size", type=int, default=16)
-    parser_lungpet_3d_parser.add_argument("--slices_per_sample", type=int, default=30)
-    parser_lungpet_3d_parser.add_argument("--samples_per_scan", type=int, default=4)
-
-    parser_lungpet_resnet_parser = subparsers.add_parser(
-        "resnet_2d", parents=[common_parser]
+    parser_capsnet3d_parser.add_argument("--out_capsule_size", type=int, default=16)
+    parser_capsnet3d_parser.add_argument("--slices_per_sample", type=int, default=30)
+    parser_capsnet3d_parser.add_argument("--samples_per_scan", type=int, default=4)
+    parser_capsnet3d_parser.add_argument(
+        "--reconstruction_loss_factor", type=float, default=0.5
     )
+    parser_resnet2d_parser = subparsers.add_parser("resnet_2d", parents=[common_parser])
 
     args = parser.parse_args()
     argsDict = vars(args)
@@ -306,4 +279,4 @@ if __name__ == "__main__":
     if not run:
         raise Exception("Wandb returned a None type run.")
     with run:
-        run_train_experiment(config=wandb.config, use_wandb=use_wandb)
+        run_train_experiment(config=argsDict, use_wandb=use_wandb)
