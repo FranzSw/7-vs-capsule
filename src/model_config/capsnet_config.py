@@ -36,7 +36,7 @@ class Config:
 
         # Digit Capsule (dc)
         self.dc_num_capsules = dc_num_capsules
-        self.dc_num_routes = 32 * 8 * 8
+        self.dc_num_routes = self.pc_num_routes
 
         # Conv Out = out_channels + (64, 64, 30) - kernel_size + 1 -> (256, 56, 56, 22)
         # Conv 3D Out = out_channels, Conv_Out - kernel_size + 1 / stride_size -> (32, 24, 24, 7)
@@ -52,6 +52,16 @@ class Config:
         pc_out_total = (
             self.pc_num_capsules * self.pc_out_channels * np.prod(pc_conv_out)
         )
+        if pc_out_total % self.dc_num_routes != 0:
+            print(f'Warning: num_routes={self.dc_num_routes} is not compatible with shape. For the given config, ensure that {pc_out_total}%num_routes = 0. Automatically finding smaller num_routes that evenly divides.')
+            # Find better pc / dc_num_routes
+            while pc_out_total % self.dc_num_routes != 0:
+                if self.dc_num_routes == 1:
+                    raise Exception('Current input shape is not compatible with any num_routes! Please resize.')
+                self.pc_num_routes -= 1
+                self.dc_num_routes -= 1
+            print(f'Configured num_routes={self.dc_num_routes}')
+
         pc_out = (self.dc_num_routes, int(pc_out_total / self.dc_num_routes))
         self.dc_in_channels = pc_out[1]
         self.dc_out_channels = out_capsule_size
