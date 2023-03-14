@@ -15,6 +15,8 @@ from pathlib import Path
 from enum import Enum
 from torchvision.transforms.functional import crop
 from dataset.base_dataset import BaseDataset
+from torch.utils.data import random_split
+
 
 def isNotEmptyMask(path_label_subject_mask):
     mask = path_label_subject_mask[3]
@@ -71,7 +73,7 @@ class CTDataSet(BaseDataset, Dataset):
         csv_file = pd.read_csv(csv_path)
 
         self.all_subjects = csv_file["Subject ID"].unique()
-        self.filtered_subjects: list[str]  = None # type: ignore
+        self.filtered_subjects: list[str] = None  # type: ignore
         if subject_count:
             print(f"Only using {subject_count} subjects")
             self.filtered_subjects: list[str] = self.all_subjects[
@@ -111,9 +113,12 @@ class CTDataSet(BaseDataset, Dataset):
     def isExcluded(self, label: str):
         return label in self.exclude_classes if self.exclude_classes != None else False
 
-    def split(self, test_size:float):
-        return self.subject_split(test_size)
-    
+    def split(self, test_size: float, mode: Literal["subject", "random"] = "subject"):
+        if mode == "subject":
+            return self.subject_split(test_size)
+        else:
+            return random_split(self, [0.8, 0.2])
+
     def subject_split(self, test_size: float):
         subj_train, subj_test = train_test_split(
             self.all_subjects
@@ -140,7 +145,7 @@ class CTDataSet(BaseDataset, Dataset):
         labels = list(map(lambda l: self.to_one_hot(l), labels))
         weights = np.sum(labels, axis=0, dtype="float32")
         weights = weights / weights.sum()
-        # TODO: check this 
+        # TODO: check this
         weights = 1.0 / weights
         weights = weights / weights.sum()
         return torch.tensor(weights)
@@ -293,7 +298,8 @@ class CTDataSet2D(CTDataSet):
 
             if w == 0 and h == 0:
                 print("width and height of masked image are 0!")
-            img = crop(img, int(y), int(x), int(size), int(size))
+            else:
+                img = crop(img, int(y), int(x), int(size), int(size))
 
             mask = np.array([0, 0, 1, 1])
         else:

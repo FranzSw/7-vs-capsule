@@ -105,6 +105,10 @@ def get_dataset(config: dict) -> BaseDataset:
     IS_RESNET = "resnet" in config["model"]
     DATASET: Literal["lungpetctx", "mnist"] = config["dataset"]
 
+    if config["crop_to_tumor"] and DATASET != "lungpetctx":
+        raise Exception(
+            "Argument --crop_to_tumor only available with dataset lungpetctx"
+        )
     if IS_3D:
         if DATASET == "lungpetctx":
             from preprocessing.preprocessing3D import Grayscale3D, Resize3D
@@ -149,6 +153,7 @@ def get_dataset(config: dict) -> BaseDataset:
                 ],
                 sampling=config["class_imbalance"],
                 max_size=config["max_loaded_samples"],
+                crop_to_tumor=config["crop_to_tumor"],
             )
         elif DATASET == "mnist":
             if config["slice_width"] != 28:
@@ -179,7 +184,7 @@ def get_dataset(config: dict) -> BaseDataset:
 def run_train_experiment(config: dict[str, Any], use_wandb: bool):
     ds = get_dataset(config)
 
-    trainSet, valSet = ds.split(0.2)
+    trainSet, valSet = ds.split(0.2, mode=config["split"])
     dataloaders = {
         "val": DataLoader(
             valSet, batch_size=config["batch_size"], shuffle=True, num_workers=4
@@ -280,6 +285,13 @@ if __name__ == "__main__":
         default="lungpetctx",
         help="Specify dataset",
     )
+    common_parser.add_argument(
+        "--split",
+        type=str,
+        choices=["random", "subject"],
+        default="subject",
+        help='Dataset split mode: if "random", randomly select 80% of samples in dataset for train, rest for validation. If "subject", keep samples of subjects in train set out of val set and attempt samples of roughly 80% of subjects to be in train set, rest in val set',
+    )
 
     subparsers = parser.add_subparsers(required=True, dest="model")
 
@@ -298,6 +310,12 @@ if __name__ == "__main__":
         type=float,
         default=0.5,
         help="Factor to scale the reconstruction loss effect",
+    )
+    capsnet2d_parser.add_argument(
+        "--crop_to_tumor",
+        action="store_true",
+        default=False,
+        help="If provided with --dataset=lungpetctx, crops the input image to the tumor",
     )
 
     capsnet3d_parser = subparsers.add_parser("capsnet_3d", parents=[common_parser])
@@ -329,7 +347,12 @@ if __name__ == "__main__":
         help="Factor to scale the reconstruction loss effect",
     )
     resnet2d_parser = subparsers.add_parser("resnet_2d", parents=[common_parser])
-
+    resnet2d_parser.add_argument(
+        "--crop_to_tumor",
+        action="store_true",
+        default=False,
+        help="If provided with --dataset=lungpetctx, crops the input image to the tumor",
+    )
     args = parser.parse_args()
     argsDict = vars(args)
     print(argsDict)
