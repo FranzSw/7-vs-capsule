@@ -2,13 +2,14 @@
 The main purpose of this repository is providing a pipeline for training and evaluating capsule nets on 2d or 3d image/volumetric datasets for the classification task. 
 In our case we apply the pipeline on the [Lung-PET-CT-Dx dataset](https://wiki.cancerimagingarchive.net/pages/viewpage.action?pageId=70224216) as well as on [MNIST](http://yann.lecun.com/exdb/mnist/) for checking our pipeline.
 
+Some collected results can be found in the [presentation](https://github.com/FranzSw/7-vs-capsule/blob/main/AdvancedMl-Final.pdf) (`AdvancedMl-Final.pdf`) in this repo.
+
 ## Installing requirements
 ### Prerequisites
 - conda 
 ### Create conda env
 Run `conda env create --file environment.yml` from this folder.
 
-TBD
 ### Update conda requirements
 Run `conda env export > environment.yml`
 
