@@ -6,7 +6,7 @@ In our case we apply the pipeline on the [Lung-PET-CT-Dx dataset](https://wiki.c
 ### Prerequisites
 - conda 
 ### Create conda env
-Run `conda create --name <env> --file environment.yml` from this folder.
+Run `conda env create --file environment.yml` from this folder.
 
 TBD
 ### Update conda requirements
